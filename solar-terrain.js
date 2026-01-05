@@ -1,6 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
+ * Version: 2.0 - Updated sun time calculations
  */
 
 let map;
