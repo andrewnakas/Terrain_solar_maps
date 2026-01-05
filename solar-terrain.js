@@ -7,9 +7,6 @@ let map;
 let currentExaggeration = 1;
 let clickMarker = null;
 let terrainCache = new Map();
-let tileCache = new Map();
-const tileSize = 256;  // AWS Terrarium tiles are 256x256
-const terrainTileUrl = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 
 // Sun position
 let sunAzimuth = 0;
@@ -305,7 +302,7 @@ async function showPointInfo(lat, lng) {
     document.getElementById('loading').classList.remove('active');
 }
 
-// Get terrain data
+// Get terrain data using MapLibre's terrain query
 async function getTerrainData(lat, lng, zoom) {
     const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
 
@@ -313,162 +310,24 @@ async function getTerrainData(lat, lng, zoom) {
         return terrainCache.get(key);
     }
 
-    const elevation = await getRealElevation(lat, lng, zoom);
+    // Use MapLibre's terrain elevation query - it already has the data loaded!
+    const elevation = map.queryTerrainElevation([lng, lat]);
 
-    if (elevation === null) {
+    if (elevation === null || elevation === undefined) {
+        console.error('MapLibre returned null elevation');
         return null;
     }
 
-    const { aspect, slope } = await calculateRealSlopeAspect(lat, lng, zoom);
+    console.log(`Elevation from MapLibre: ${elevation.toFixed(2)}m`);
 
-    const data = { elevation, aspect, slope };
-    terrainCache.set(key, data);
+    // Calculate slope and aspect using nearby points
+    const delta = 0.0001; // ~11 meters
+    const elevNorth = map.queryTerrainElevation([lng, lat + delta]) || elevation;
+    const elevSouth = map.queryTerrainElevation([lng, lat - delta]) || elevation;
+    const elevEast = map.queryTerrainElevation([lng + delta, lat]) || elevation;
+    const elevWest = map.queryTerrainElevation([lng - delta, lat]) || elevation;
 
-    if (terrainCache.size > 10000) {
-        const firstKey = terrainCache.keys().next().value;
-        terrainCache.delete(firstKey);
-    }
-
-    return data;
-}
-
-// Convert lat/lng to tile coordinates
-function latLngToTile(lat, lng, zoom) {
-    const x = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
-    const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
-    return { x, y, z: zoom };
-}
-
-// Load terrain tile
-async function loadTerrainTile(tileX, tileY, zoom) {
-    const tileKey = `${zoom}/${tileX}/${tileY}`;
-
-    if (tileCache.has(tileKey)) {
-        return tileCache.get(tileKey);
-    }
-
-    try {
-        const url = terrainTileUrl
-            .replace('{z}', zoom)
-            .replace('{x}', tileX)
-            .replace('{y}', tileY);
-
-        console.log('Loading terrain tile:', url);
-
-        const img = await loadImage(url);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = tileSize;
-        canvas.height = tileSize;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-
-        const imageData = ctx.getImageData(0, 0, tileSize, tileSize);
-
-        // Check if we got valid data
-        let hasData = false;
-        for (let i = 0; i < Math.min(1000, imageData.data.length); i += 4) {
-            if (imageData.data[i] !== 0 || imageData.data[i+1] !== 0 || imageData.data[i+2] !== 0) {
-                hasData = true;
-                break;
-            }
-        }
-
-        if (!hasData) {
-            console.warn('Terrain tile appears to be empty');
-        } else {
-            console.log('Terrain tile loaded successfully');
-        }
-
-        tileCache.set(tileKey, imageData);
-
-        if (tileCache.size > 50) {
-            const firstKey = tileCache.keys().next().value;
-            tileCache.delete(firstKey);
-        }
-
-        return imageData;
-    } catch (error) {
-        console.error('Error loading terrain tile:', tileKey, error);
-        return null;
-    }
-}
-
-// Load image
-function loadImage(url) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = url;
-    });
-}
-
-// Decode Terrarium RGB
-function decodeTerrainRGB(r, g, b) {
-    return (r * 256 + g + b / 256) - 32768;
-}
-
-// Get real elevation
-async function getRealElevation(lat, lng, zoom) {
-    const tile = latLngToTile(lat, lng, zoom);
-    console.log(`Getting elevation for ${lat.toFixed(4)}, ${lng.toFixed(4)} at zoom ${zoom}, tile: ${tile.x},${tile.y},${tile.z}`);
-
-    const tileData = await loadTerrainTile(tile.x, tile.y, zoom);
-
-    if (!tileData) {
-        console.error('Failed to load tile data');
-        return null;
-    }
-
-    const scale = Math.pow(2, zoom);
-    const worldX = (lng + 180) / 360 * scale;
-    const worldY = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * scale;
-
-    const pixelX = Math.floor((worldX - tile.x) * tileSize);
-    const pixelY = Math.floor((worldY - tile.y) * tileSize);
-
-    console.log(`Pixel position: ${pixelX}, ${pixelY} (tile size: ${tileSize})`);
-
-    if (pixelX < 0 || pixelX >= tileSize || pixelY < 0 || pixelY >= tileSize) {
-        console.error('Pixel coordinates out of bounds');
-        return null;
-    }
-
-    const idx = (pixelY * tileSize + pixelX) * 4;
-    const r = tileData.data[idx];
-    const g = tileData.data[idx + 1];
-    const b = tileData.data[idx + 2];
-
-    console.log(`RGB values at pixel: ${r}, ${g}, ${b}`);
-
-    if (r === 0 && g === 0 && b === 0) {
-        console.warn('Pixel has no data (all zeros)');
-        return null;
-    }
-
-    const elevation = decodeTerrainRGB(r, g, b);
-    console.log(`Decoded elevation: ${elevation.toFixed(2)}m`);
-
-    return elevation;
-}
-
-// Calculate slope and aspect
-async function calculateRealSlopeAspect(lat, lng, zoom) {
-    const delta = 0.0001;
-
-    const elevCenter = await getRealElevation(lat, lng, zoom);
-    const elevNorth = await getRealElevation(lat + delta, lng, zoom);
-    const elevSouth = await getRealElevation(lat - delta, lng, zoom);
-    const elevEast = await getRealElevation(lat, lng + delta, zoom);
-    const elevWest = await getRealElevation(lat, lng - delta, zoom);
-
-    if (elevCenter === null || elevNorth === null || elevSouth === null ||
-        elevEast === null || elevWest === null) {
-        return { aspect: 0, slope: 0 };
-    }
-
+    // Calculate slope and aspect
     const metersPerDegree = 111320 * Math.cos(lat * Math.PI / 180);
     const dzdx = (elevEast - elevWest) / (2 * delta * metersPerDegree);
     const dzdy = (elevSouth - elevNorth) / (2 * delta * 111320);
@@ -482,7 +341,17 @@ async function calculateRealSlopeAspect(lat, lng, zoom) {
     if (aspect < 0) aspect += 360;
     if (aspect >= 360) aspect -= 360;
 
-    return { aspect, slope };
+    console.log(`Slope: ${slope.toFixed(1)}°, Aspect: ${aspect.toFixed(0)}°`);
+
+    const data = { elevation, aspect, slope };
+    terrainCache.set(key, data);
+
+    if (terrainCache.size > 10000) {
+        const firstKey = terrainCache.keys().next().value;
+        terrainCache.delete(firstKey);
+    }
+
+    return data;
 }
 
 // Calculate exposure
@@ -509,22 +378,21 @@ async function calculateExposure(aspect, slope, elevation, lat, lng) {
 
     // Apply shadow check (simplified for performance)
     if (exposure > 0) {
-        const shadowFactor = await calculateShadow(lat, lng, elevation);
+        const shadowFactor = calculateShadow(lat, lng, elevation);
         exposure *= shadowFactor;
     }
 
     return exposure;
 }
 
-// Calculate shadow
-async function calculateShadow(lat, lng, elevation) {
+// Calculate shadow using MapLibre terrain
+function calculateShadow(lat, lng, elevation) {
     if (sunAltitude < 0) {
         return 0;
     }
 
     const maxDistance = 5000;
     const stepSize = 100;
-    const zoom = Math.min(map.getZoom(), 12);
 
     const sunAzRad = sunAzimuth * Math.PI / 180;
     const sunAltRad = sunAltitude * Math.PI / 180;
@@ -545,9 +413,9 @@ async function calculateShadow(lat, lng, elevation) {
         currentLng += lngStep;
 
         const rayHeight = elevation + distance * Math.tan(sunAltRad);
-        const terrainHeight = await getRealElevation(currentLat, currentLng, zoom);
+        const terrainHeight = map.queryTerrainElevation([currentLng, currentLat]);
 
-        if (terrainHeight === null) break;
+        if (terrainHeight === null || terrainHeight === undefined) break;
         if (terrainHeight > rayHeight) return 0;
         if (rayHeight - terrainHeight > 500) break;
     }
