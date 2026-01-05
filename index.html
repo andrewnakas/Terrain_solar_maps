@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Terrain Solar Analysis</title>
+
+    <!-- MapLibre GL JS for 3D terrain -->
+    <script src="https://unpkg.com/maplibre-gl@4.1.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.1.1/dist/maplibre-gl.css" rel="stylesheet">
+
+    <!-- SunCalc for solar calculations -->
+    <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+            background: #1a1a1a;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* Solar data sidebar */
+        .solar-sidebar {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 380px;
+            height: 100vh;
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(20px);
+            color: white;
+            z-index: 1000;
+            overflow-y: auto;
+            box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .solar-sidebar.collapsed {
+            transform: translateX(100%);
+        }
+
+        .sidebar-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ff6b00;
+        }
+
+        .collapse-btn {
+            width: 32px;
+            height: 32px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .collapse-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .sidebar-content {
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .location-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .location-title {
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        .location-coords {
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-unit {
+            font-size: 14px;
+            color: #999;
+            margin-left: 2px;
+        }
+
+        .sun-timeline {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .timeline-item {
+            font-size: 13px;
+        }
+
+        .timeline-label {
+            color: #999;
+            font-size: 11px;
+        }
+
+        .timeline-value {
+            color: #fff;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .exposure-chart {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .chart-bars {
+            display: flex;
+            gap: 2px;
+            height: 80px;
+            align-items: flex-end;
+            margin-top: 12px;
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: #333;
+            border-radius: 2px 2px 0 0;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .chart-bar.exposed {
+            background: linear-gradient(to top, #ff6b00, #ffa500);
+        }
+
+        .chart-bar.shadow {
+            background: linear-gradient(to top, #1a1a1a, #333);
+        }
+
+        .chart-bar.current {
+            box-shadow: 0 0 8px rgba(255,107,0,0.8);
+        }
+
+        .chart-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 10px;
+            color: #666;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Top controls */
+        .top-controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 1;
+            backdrop-filter: blur(10px);
+            max-width: 280px;
+        }
+
+        .top-controls h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #fff;
+        }
+
+        .badge {
+            background: #ff6b35;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        /* Bottom controls */
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            right: 400px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 8px;
+            padding: 10px 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            z-index: 1;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            background: #0078A8;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn:hover {
+            background: #005a7d;
+            transform: translateY(-1px);
+        }
+
+        .settings-panel {
+            position: absolute;
+            top: 10px;
+            right: 400px;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 1;
+            backdrop-filter: blur(10px);
+            min-width: 220px;
+        }
+
+        .settings-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        .slider-container {
+            margin: 10px 0;
+        }
+
+        .slider-container label {
+            display: block;
+            font-size: 12px;
+            color: #ccc;
+            margin-bottom: 5px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            background: #444;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff6b35;
+            cursor: pointer;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff6b35;
+            cursor: pointer;
+            border: none;
+        }
+
+        .value-display {
+            font-size: 12px;
+            color: #ff6b35;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            text-align: center;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #ff6b35;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .sun-badge {
+            position: absolute;
+            top: 80px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
+            color: #ffa500;
+            padding: 8px 14px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+
+        /* Marker style */
+        .click-marker {
+            width: 20px;
+            height: 20px;
+            background: #ff6b00;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(255,107,0,0.8);
+        }
+
+        @media (max-width: 768px) {
+            .solar-sidebar {
+                width: 100%;
+                height: 50vh;
+                top: auto;
+                bottom: 0;
+                border-radius: 16px 16px 0 0;
+            }
+
+            .solar-sidebar.collapsed {
+                transform: translateY(calc(100% - 50px));
+            }
+
+            .settings-panel, .controls {
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Sun position badge -->
+    <div class="sun-badge" id="sun-badge">☀ Loading...</div>
+
+    <!-- Top info panel -->
+    <div class="top-controls">
+        <h2>🏔️ 3D Solar Terrain</h2>
+        <span class="badge">SOLAR + 3D</span>
+        <p style="margin-top: 10px; font-size: 13px; color: #ccc;">Click anywhere on the map to analyze sun exposure and terrain data</p>
+    </div>
+
+    <!-- Settings panel -->
+    <div class="settings-panel">
+        <h3>⚙️ 3D Controls</h3>
+        <div class="slider-container">
+            <label>Terrain Height</label>
+            <input type="range" min="1" max="5" step="0.5" value="1" class="slider" id="exaggeration">
+            <div class="value-display" id="exag-value">1x</div>
+        </div>
+        <div class="slider-container">
+            <label>Camera Angle</label>
+            <input type="range" min="0" max="85" step="1" value="75" class="slider" id="pitch">
+            <div class="value-display" id="pitch-value">75°</div>
+        </div>
+    </div>
+
+    <!-- Bottom controls -->
+    <div class="controls">
+        <button class="btn" onclick="flyToGrandCanyon()">Grand Canyon</button>
+        <button class="btn" onclick="flyToEverest()">Mt. Everest</button>
+        <button class="btn" onclick="flyToAlps()">Swiss Alps</button>
+        <button class="btn" onclick="flyToYosemite()">Yosemite</button>
+    </div>
+
+    <!-- Solar data sidebar -->
+    <div class="solar-sidebar" id="solar-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">☀ Solar Analysis</div>
+            <button class="collapse-btn" id="collapse-btn">→</button>
+        </div>
+
+        <div class="sidebar-content">
+            <!-- Empty state -->
+            <div class="empty-state" id="empty-state">
+                <div class="empty-state-icon">📍</div>
+                <div class="empty-state-text">Click anywhere on the map to analyze sun exposure and terrain data for that location</div>
+            </div>
+
+            <!-- Solar data (hidden until clicked) -->
+            <div id="solar-data" style="display: none;">
+                <!-- Location -->
+                <div class="section">
+                    <div class="section-title">Location</div>
+                    <div class="location-card">
+                        <div class="location-title">Coordinates</div>
+                        <div class="location-coords" id="location-coords">--</div>
+                    </div>
+                </div>
+
+                <!-- Terrain stats -->
+                <div class="section">
+                    <div class="section-title">Terrain</div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Elevation</div>
+                            <div>
+                                <span class="stat-value" id="elevation-value">--</span>
+                                <span class="stat-unit">m</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Slope</div>
+                            <div>
+                                <span class="stat-value" id="slope-value">--</span>
+                                <span class="stat-unit">°</span>
+                            </div>
+                        </div>
+                        <div class="stat-card" style="grid-column: 1 / -1;">
+                            <div class="stat-label">Aspect</div>
+                            <div>
+                                <span class="stat-value" id="aspect-value">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sun timeline -->
+                <div class="section">
+                    <div class="section-title">Sun Times</div>
+                    <div class="sun-timeline">
+                        <div class="timeline-header">
+                            <div class="timeline-item">
+                                <div class="timeline-label">Sunrise</div>
+                                <div class="timeline-value" id="sunrise-time">--</div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-label">Sunset</div>
+                                <div class="timeline-value" id="sunset-time">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current exposure -->
+                <div class="section">
+                    <div class="section-title">Current Sun Exposure</div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Exposure</div>
+                            <div>
+                                <span class="stat-value" id="current-exposure">--</span>
+                                <span class="stat-unit">%</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Status</div>
+                            <div>
+                                <span class="stat-value" id="sun-status" style="font-size: 16px;">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hourly exposure chart -->
+                <div class="section">
+                    <div class="section-title">Hourly Sun Exposure</div>
+                    <div class="exposure-chart">
+                        <div style="font-size: 13px; color: #999; margin-bottom: 8px;">
+                            Total sun hours: <span id="total-sun-hours" style="color: #fff; font-weight: 600;">--</span>
+                        </div>
+                        <div class="chart-bars" id="exposure-bars">
+                            <!-- Dynamic hourly bars -->
+                        </div>
+                        <div class="chart-labels">
+                            <span>00:00</span>
+                            <span>06:00</span>
+                            <span>12:00</span>
+                            <span>18:00</span>
+                            <span>24:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading indicator -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p style="margin-top: 10px;">Analyzing solar exposure...</p>
+    </div>
+
+    <!-- Main App Script -->
+    <script src="solar-terrain.js"></script>
+
+    <script>
+        // Collapse button
+        document.getElementById('collapse-btn').addEventListener('click', () => {
+            document.getElementById('solar-sidebar').classList.toggle('collapsed');
+        });
+    </script>
+</body>
+</html>
