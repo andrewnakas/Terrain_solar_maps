@@ -6,6 +6,7 @@
 let map;
 let currentExaggeration = 1;
 let clickMarker = null;
+let analysisGrid = null; // Grid showing analysis area
 let terrainCache = new Map();
 
 // Sun position
@@ -186,6 +187,10 @@ function flyToYosemite() {
 // Click handler for point analysis
 map.on('click', async (e) => {
     const latlng = e.lngLat;
+
+    // Wait a bit for terrain to be fully loaded
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     await showPointInfo(latlng.lat, latlng.lng);
 });
 
@@ -225,6 +230,56 @@ async function showPointInfo(lat, lng) {
     clickMarker = new maplibregl.Marker({ element: el })
         .setLngLat([lng, lat])
         .addTo(map);
+
+    // Add analysis grid showing the sampled area
+    if (analysisGrid) {
+        map.removeLayer('analysis-grid-fill');
+        map.removeLayer('analysis-grid-line');
+        map.removeSource('analysis-grid');
+    }
+
+    const gridSize = 0.0002; // ~22 meters
+    const bounds = [
+        [lng - gridSize, lat - gridSize],
+        [lng + gridSize, lat - gridSize],
+        [lng + gridSize, lat + gridSize],
+        [lng - gridSize, lat + gridSize],
+        [lng - gridSize, lat - gridSize]
+    ];
+
+    map.addSource('analysis-grid', {
+        'type': 'geojson',
+        'data': {
+            'type': 'Feature',
+            'geometry': {
+                'type': 'Polygon',
+                'coordinates': [bounds]
+            }
+        }
+    });
+
+    map.addLayer({
+        'id': 'analysis-grid-fill',
+        'type': 'fill',
+        'source': 'analysis-grid',
+        'paint': {
+            'fill-color': '#ff6b00',
+            'fill-opacity': 0.1
+        }
+    });
+
+    map.addLayer({
+        'id': 'analysis-grid-line',
+        'type': 'line',
+        'source': 'analysis-grid',
+        'paint': {
+            'line-color': '#ff6b00',
+            'line-width': 2,
+            'line-dasharray': [2, 2]
+        }
+    });
+
+    analysisGrid = true;
 
     try {
         const zoom = Math.min(map.getZoom(), 12);
@@ -274,8 +329,21 @@ async function showPointInfo(lat, lng) {
         const sunTimes = SunCalc.getTimes(currentDate, lat, lng);
         const formatTime = (date) => date ? date.toTimeString().slice(0, 5) : '--:--';
 
-        document.getElementById('sunrise-time').textContent = formatTime(sunTimes.sunrise);
-        document.getElementById('sunset-time').textContent = formatTime(sunTimes.sunset);
+        // Astronomical times (textbook horizon)
+        document.getElementById('astronomical-sunrise').textContent = formatTime(sunTimes.sunrise);
+        document.getElementById('astronomical-sunset').textContent = formatTime(sunTimes.sunset);
+
+        // Calculate terrain-aware sun times
+        console.log('Calculating terrain-aware sun times...');
+        const terrainSunTimes = calculateTerrainSunTimes(lat, lng, terrainData.elevation);
+        document.getElementById('terrain-sunrise').textContent = formatTime(terrainSunTimes.sunrise);
+        document.getElementById('terrain-sunset').textContent = formatTime(terrainSunTimes.sunset);
+
+        // Calculate slope sun times
+        console.log('Calculating slope sun times...');
+        const slopeTimes = calculateSlopeSunTimes(lat, lng, terrainData);
+        document.getElementById('slope-sun-start').textContent = formatTime(slopeTimes.slopeStart);
+        document.getElementById('slope-sun-end').textContent = formatTime(slopeTimes.slopeEnd);
 
         // Update current exposure
         document.getElementById('current-exposure').textContent = Math.round(exposure * 100);
@@ -421,6 +489,185 @@ function calculateShadow(lat, lng, elevation) {
     }
 
     return 1;
+}
+
+// Calculate terrain-aware sun times (when sun clears terrain obstacles)
+function calculateTerrainSunTimes(lat, lng, elevation) {
+    const date = currentDate;
+    const sunTimes = SunCalc.getTimes(date, lat, lng);
+
+    let terrainSunrise = sunTimes.sunrise;
+    let terrainSunset = sunTimes.sunset;
+
+    // Check if terrain blocks sunrise (eastern mountains)
+    if (sunTimes.sunrise && !isNaN(sunTimes.sunrise.getTime())) {
+        // Walk forward from astronomical sunrise
+        for (let i = 0; i < 180; i += 5) {
+            const testDate = new Date(sunTimes.sunrise.getTime() + i * 60 * 1000);
+            const testPos = SunCalc.getPosition(testDate, lat, lng);
+            const testAlt = testPos.altitude * 180 / Math.PI;
+            const testAz = ((testPos.azimuth * 180 / Math.PI) + 180) % 360;
+
+            if (testAlt > 0) {
+                // Quick check: is sun blocked by terrain?
+                const isBlocked = checkTerrainBlocking(lat, lng, elevation, testAz, testAlt);
+                if (!isBlocked) {
+                    terrainSunrise = testDate;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Check if terrain blocks sunset (western mountains)
+    if (sunTimes.sunset && !isNaN(sunTimes.sunset.getTime())) {
+        // Walk backward from astronomical sunset
+        for (let i = 0; i < 180; i += 5) {
+            const testDate = new Date(sunTimes.sunset.getTime() - i * 60 * 1000);
+            const testPos = SunCalc.getPosition(testDate, lat, lng);
+            const testAlt = testPos.altitude * 180 / Math.PI;
+            const testAz = ((testPos.azimuth * 180 / Math.PI) + 180) % 360;
+
+            if (testAlt > 0) {
+                const isBlocked = checkTerrainBlocking(lat, lng, elevation, testAz, testAlt);
+                if (!isBlocked) {
+                    terrainSunset = testDate;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    return {
+        sunrise: terrainSunrise,
+        sunset: terrainSunset
+    };
+}
+
+// Check if terrain blocks sun at given azimuth and altitude
+function checkTerrainBlocking(lat, lng, elevation, azimuth, altitude) {
+    const maxDistance = 5000;
+    const stepSize = 200;
+
+    const azRad = azimuth * Math.PI / 180;
+    const altRad = altitude * Math.PI / 180;
+
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLng = 111320 * Math.cos(lat * Math.PI / 180);
+
+    const latStep = (Math.cos(azRad) * stepSize) / metersPerDegreeLat;
+    const lngStep = (Math.sin(azRad) * stepSize) / metersPerDegreeLng;
+
+    let currentLat = lat;
+    let currentLng = lng;
+    let distance = 0;
+
+    while (distance < maxDistance) {
+        distance += stepSize;
+        currentLat += latStep;
+        currentLng += lngStep;
+
+        const rayHeight = elevation + distance * Math.tan(altRad);
+        const terrainHeight = map.queryTerrainElevation([currentLng, currentLat]);
+
+        if (terrainHeight === null || terrainHeight === undefined) break;
+        if (terrainHeight > rayHeight) return true; // Blocked
+        if (rayHeight - terrainHeight > 500) break;
+    }
+
+    return false; // Not blocked
+}
+
+// Calculate when sun hits and leaves this specific slope
+function calculateSlopeSunTimes(lat, lng, terrainData) {
+    const date = currentDate;
+    let slopeStartTime = null;
+    let slopeEndTime = null;
+    let lastExposedTime = null;
+
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    let wasExposed = false;
+
+    // Check every 15 minutes throughout the day
+    for (let minutes = 0; minutes < 1440; minutes += 15) {
+        const testTime = new Date(startOfDay);
+        testTime.setMinutes(minutes);
+
+        const sunPos = SunCalc.getPosition(testTime, lat, lng);
+        const sunAltitude = sunPos.altitude * 180 / Math.PI;
+        const sunAzimuth = ((sunPos.azimuth * 180 / Math.PI) + 180) % 360;
+
+        // Check if sun is above horizon
+        if (sunAltitude <= 0) {
+            if (wasExposed) {
+                slopeEndTime = lastExposedTime;
+                wasExposed = false;
+            }
+            continue;
+        }
+
+        // Check if sun is blocked by terrain
+        const sunBlocked = checkTerrainBlocking(lat, lng, terrainData.elevation, sunAzimuth, sunAltitude);
+
+        // Check if sun is facing the slope (dot product test)
+        const slopeFacing = isSlopeFacingSun(
+            terrainData.aspect,
+            terrainData.slope,
+            sunAzimuth,
+            sunAltitude
+        );
+
+        // Slope is exposed if: sun above horizon, not blocked, and facing slope
+        const isExposed = !sunBlocked && slopeFacing;
+
+        if (isExposed) {
+            lastExposedTime = new Date(testTime);
+
+            if (!wasExposed) {
+                slopeStartTime = new Date(testTime);
+                wasExposed = true;
+            }
+        } else if (wasExposed) {
+            slopeEndTime = new Date(testTime);
+            wasExposed = false;
+        }
+    }
+
+    // If still exposed at end of day, use last exposure time
+    if (wasExposed && lastExposedTime) {
+        slopeEndTime = lastExposedTime;
+    }
+
+    return {
+        slopeStart: slopeStartTime,
+        slopeEnd: slopeEndTime
+    };
+}
+
+// Check if sun is facing the slope
+function isSlopeFacingSun(aspect, slope, sunAzimuth, sunAltitude) {
+    const slopeRad = slope * Math.PI / 180;
+    const aspectRad = aspect * Math.PI / 180;
+    const sunAltRad = sunAltitude * Math.PI / 180;
+    const sunAzRad = sunAzimuth * Math.PI / 180;
+
+    // Slope normal vector (pointing outward from slope surface)
+    const slopeNx = Math.sin(slopeRad) * Math.sin(aspectRad);
+    const slopeNy = Math.sin(slopeRad) * Math.cos(aspectRad);
+    const slopeNz = Math.cos(slopeRad);
+
+    // Sun direction vector (pointing toward sun)
+    const sunDx = Math.cos(sunAltRad) * Math.sin(sunAzRad);
+    const sunDy = Math.cos(sunAltRad) * Math.cos(sunAzRad);
+    const sunDz = Math.sin(sunAltRad);
+
+    // Dot product - positive means sun is facing the slope
+    const dotProduct = slopeNx * sunDx + slopeNy * sunDy + slopeNz * sunDz;
+
+    return dotProduct > 0;
 }
 
 // Calculate hourly exposure
