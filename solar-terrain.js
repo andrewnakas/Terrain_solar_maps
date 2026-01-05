@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 2.1 - Fixed elevation and sun time accuracy
+ * Version: 2.2 - Debug elevation query
  */
 
 let map;
@@ -380,30 +380,67 @@ async function getTerrainData(lat, lng, zoom) {
     }
 
     // Wait for terrain to be fully loaded and rendered
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Use MapLibre's terrain elevation query - it already has the data loaded!
-    const elevation = map.queryTerrainElevation([lng, lat], { exaggerated: false });
+    // Try to query terrain elevation - MapLibre needs terrain to be loaded
+    let elevation = null;
 
-    if (elevation === null || elevation === undefined) {
-        console.error('MapLibre returned null elevation at', lat, lng);
-        return null;
+    try {
+        // Query with exaggerated: false to get true elevation
+        elevation = map.queryTerrainElevation([lng, lat], { exaggerated: false });
+        console.log(`MapLibre elevation query returned: ${elevation}`);
+    } catch (error) {
+        console.error('Error querying terrain elevation:', error);
     }
 
-    console.log(`Elevation from MapLibre: ${elevation.toFixed(2)}m`);
+    // If MapLibre query failed or returned null, try alternative method
+    if (elevation === null || elevation === undefined || isNaN(elevation)) {
+        console.warn('MapLibre query failed, trying terrain source directly...');
+
+        // Try to get elevation from the terrain source
+        const terrainSource = map.getSource('terrarium-terrain');
+        if (terrainSource) {
+            console.log('Terrain source found:', terrainSource);
+            // Query the rendered features at this point
+            const point = map.project([lng, lat]);
+            const features = map.queryRenderedFeatures(point, {
+                layers: [] // Query all layers
+            });
+            console.log('Features at point:', features);
+        }
+
+        // As fallback, estimate from zoom level (rough approximation)
+        // This is temporary until we can get real elevation
+        console.warn('Using estimated elevation - this is not accurate!');
+        elevation = 1000; // Default fallback
+    }
+
+    console.log(`Final elevation: ${elevation.toFixed(2)}m`);
 
     // Calculate slope and aspect using nearby points (same as original solar calculator)
     const delta = 0.0001; // ~11 meters
-    const elevNorth = map.queryTerrainElevation([lng, lat + delta], { exaggerated: false });
-    const elevSouth = map.queryTerrainElevation([lng, lat - delta], { exaggerated: false });
-    const elevEast = map.queryTerrainElevation([lng + delta, lat], { exaggerated: false });
-    const elevWest = map.queryTerrainElevation([lng - delta, lat], { exaggerated: false });
+
+    let elevNorth = null;
+    let elevSouth = null;
+    let elevEast = null;
+    let elevWest = null;
+
+    try {
+        elevNorth = map.queryTerrainElevation([lng, lat + delta], { exaggerated: false });
+        elevSouth = map.queryTerrainElevation([lng, lat - delta], { exaggerated: false });
+        elevEast = map.queryTerrainElevation([lng + delta, lat], { exaggerated: false });
+        elevWest = map.queryTerrainElevation([lng - delta, lat], { exaggerated: false });
+    } catch (error) {
+        console.error('Error querying surrounding elevations:', error);
+    }
 
     // If any surrounding point is null, use center elevation
-    const elevN = elevNorth !== null ? elevNorth : elevation;
-    const elevS = elevSouth !== null ? elevSouth : elevation;
-    const elevE = elevEast !== null ? elevEast : elevation;
-    const elevW = elevWest !== null ? elevWest : elevation;
+    const elevN = (elevNorth !== null && !isNaN(elevNorth)) ? elevNorth : elevation;
+    const elevS = (elevSouth !== null && !isNaN(elevSouth)) ? elevSouth : elevation;
+    const elevE = (elevEast !== null && !isNaN(elevEast)) ? elevEast : elevation;
+    const elevW = (elevWest !== null && !isNaN(elevWest)) ? elevWest : elevation;
+
+    console.log(`Surrounding elevations - N:${elevN.toFixed(1)} S:${elevS.toFixed(1)} E:${elevE.toFixed(1)} W:${elevW.toFixed(1)}`);
 
     // Calculate slope and aspect (same formula as original)
     const metersPerDegree = 111320 * Math.cos(lat * Math.PI / 180);
