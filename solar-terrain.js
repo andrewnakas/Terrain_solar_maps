@@ -246,6 +246,14 @@ async function showPointInfo(lat, lng) {
         document.getElementById('empty-state').style.display = 'none';
         document.getElementById('solar-data').style.display = 'block';
 
+        // Scroll to solar section smoothly
+        setTimeout(() => {
+            const solarSection = document.querySelector('.solar-section');
+            if (solarSection) {
+                solarSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 300);
+
         // Update location
         document.getElementById('location-coords').textContent =
             `${lat.toFixed(6)}°, ${lng.toFixed(6)}°`;

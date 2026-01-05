@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>3D Terrain Solar Analysis</title>
 
     <!-- MapLibre GL JS for 3D terrain -->
@@ -21,186 +21,193 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            overflow: hidden;
+            overflow-y: auto;
+            overflow-x: hidden;
             background: #1a1a1a;
         }
 
+        /* Map container - larger, takes most of viewport */
         #map {
-            position: absolute;
-            top: 0;
-            bottom: 0;
+            position: relative;
             width: 100%;
-            height: 100vh;
+            height: 90vh;
+            min-height: 600px;
         }
 
-        /* Solar data sidebar */
-        .solar-sidebar {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 380px;
-            height: 100vh;
-            background: rgba(20, 20, 20, 0.95);
-            backdrop-filter: blur(20px);
+        /* Solar data section - below the map */
+        .solar-section {
+            position: relative;
+            width: 100%;
+            background: linear-gradient(to bottom, #1a1a1a, #0a0a0a);
             color: white;
-            z-index: 1000;
-            overflow-y: auto;
-            box-shadow: -4px 0 24px rgba(0,0,0,0.3);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 40px 20px;
+            min-height: 100vh;
         }
 
-        .solar-sidebar.collapsed {
-            transform: translateX(100%);
+        .solar-container {
+            max-width: 1200px;
+            margin: 0 auto;
         }
 
-        .sidebar-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .solar-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid rgba(255, 107, 0, 0.3);
         }
 
-        .sidebar-title {
-            font-size: 18px;
+        .solar-header h1 {
+            font-size: 36px;
             font-weight: 700;
             color: #ff6b00;
+            margin-bottom: 10px;
         }
 
-        .collapse-btn {
-            width: 32px;
-            height: 32px;
-            background: rgba(255,255,255,0.1);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .collapse-btn:hover {
-            background: rgba(255,255,255,0.2);
-        }
-
-        .sidebar-content {
-            padding: 20px;
+        .solar-header p {
+            font-size: 16px;
+            color: #999;
         }
 
         .section {
-            margin-bottom: 24px;
+            margin-bottom: 40px;
         }
 
         .section-title {
-            font-size: 14px;
+            font-size: 18px;
             font-weight: 600;
-            color: #999;
+            color: #ff6b00;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 12px;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
 
         .location-card {
             background: rgba(255,255,255,0.05);
             border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
         }
 
         .location-title {
-            font-size: 13px;
+            font-size: 14px;
             color: #999;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
         }
 
         .location-coords {
-            font-size: 16px;
+            font-size: 24px;
             font-weight: 600;
             font-family: 'Monaco', 'Courier New', monospace;
         }
 
         .stats-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
         }
 
         .stat-card {
             background: rgba(255,255,255,0.05);
             border-radius: 12px;
-            padding: 12px;
+            padding: 24px;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .stat-card:hover {
+            background: rgba(255,255,255,0.08);
+            transform: translateY(-2px);
         }
 
         .stat-label {
-            font-size: 11px;
+            font-size: 12px;
             color: #999;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .stat-value {
-            font-size: 20px;
+            font-size: 32px;
             font-weight: 700;
             color: #fff;
         }
 
         .stat-unit {
-            font-size: 14px;
+            font-size: 18px;
             color: #999;
-            margin-left: 2px;
+            margin-left: 4px;
         }
 
         .sun-timeline {
             background: rgba(255,255,255,0.05);
             border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
         }
 
         .timeline-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-bottom: 16px;
         }
 
         .timeline-item {
-            font-size: 13px;
+            text-align: center;
         }
 
         .timeline-label {
             color: #999;
-            font-size: 11px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
         }
 
         .timeline-value {
             color: #fff;
-            font-weight: 600;
-            font-size: 15px;
+            font-weight: 700;
+            font-size: 28px;
         }
 
         .exposure-chart {
             background: rgba(255,255,255,0.05);
             border-radius: 12px;
-            padding: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .chart-info {
+            font-size: 16px;
+            color: #999;
             margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .chart-info span {
+            color: #fff;
+            font-weight: 700;
+            font-size: 20px;
         }
 
         .chart-bars {
             display: flex;
-            gap: 2px;
-            height: 80px;
+            gap: 3px;
+            height: 150px;
             align-items: flex-end;
-            margin-top: 12px;
+            margin-top: 20px;
+            padding: 0 10px;
         }
 
         .chart-bar {
             flex: 1;
             background: #333;
-            border-radius: 2px 2px 0 0;
+            border-radius: 3px 3px 0 0;
             position: relative;
             transition: all 0.2s;
+            min-width: 2px;
         }
 
         .chart-bar.exposed {
@@ -212,35 +219,37 @@
         }
 
         .chart-bar.current {
-            box-shadow: 0 0 8px rgba(255,107,0,0.8);
+            box-shadow: 0 0 12px rgba(255,107,0,0.8);
+            transform: scaleX(1.2);
         }
 
         .chart-labels {
             display: flex;
             justify-content: space-between;
-            margin-top: 8px;
-            font-size: 10px;
+            margin-top: 12px;
+            font-size: 12px;
             color: #666;
+            padding: 0 10px;
         }
 
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
+            padding: 80px 20px;
             color: #666;
         }
 
         .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 12px;
+            font-size: 64px;
+            margin-bottom: 20px;
             opacity: 0.5;
         }
 
         .empty-state-text {
-            font-size: 14px;
+            font-size: 18px;
             line-height: 1.6;
         }
 
-        /* Top controls */
+        /* Top controls overlay on map */
         .top-controls {
             position: absolute;
             top: 10px;
@@ -277,7 +286,7 @@
             position: absolute;
             bottom: 20px;
             left: 10px;
-            right: 400px;
+            right: 10px;
             background: rgba(0, 0, 0, 0.85);
             border-radius: 8px;
             padding: 10px 15px;
@@ -285,17 +294,18 @@
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
+            justify-content: center;
             z-index: 1;
             backdrop-filter: blur(10px);
         }
 
         .btn {
-            padding: 8px 15px;
+            padding: 10px 20px;
             border: none;
             border-radius: 5px;
             background: #0078A8;
             color: white;
-            font-size: 13px;
+            font-size: 14px;
             cursor: pointer;
             transition: all 0.3s;
             font-weight: 500;
@@ -309,7 +319,7 @@
         .settings-panel {
             position: absolute;
             top: 10px;
-            right: 400px;
+            right: 10px;
             background: rgba(0, 0, 0, 0.85);
             color: white;
             border-radius: 8px;
@@ -373,7 +383,7 @@
         }
 
         .loading {
-            position: absolute;
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
@@ -421,90 +431,144 @@
             z-index: 1;
         }
 
-        /* Marker style */
-        .click-marker {
-            width: 20px;
-            height: 20px;
-            background: #ff6b00;
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 12px rgba(255,107,0,0.8);
+        /* Scroll indicator */
+        .scroll-indicator {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1;
+            text-align: center;
+            color: white;
+            animation: bounce 2s infinite;
+        }
+
+        .scroll-indicator-text {
+            font-size: 14px;
+            margin-bottom: 8px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 8px 16px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateX(-50%) translateY(0);
+            }
+            40% {
+                transform: translateX(-50%) translateY(-10px);
+            }
+            60% {
+                transform: translateX(-50%) translateY(-5px);
+            }
+        }
+
+        .scroll-arrow {
+            font-size: 24px;
         }
 
         @media (max-width: 768px) {
-            .solar-sidebar {
-                width: 100%;
-                height: 50vh;
-                top: auto;
-                bottom: 0;
-                border-radius: 16px 16px 0 0;
+            #map {
+                height: 70vh;
+                min-height: 400px;
             }
 
-            .solar-sidebar.collapsed {
-                transform: translateY(calc(100% - 50px));
+            .solar-section {
+                padding: 20px 15px;
             }
 
-            .settings-panel, .controls {
-                right: 10px;
+            .solar-header h1 {
+                font-size: 28px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-value {
+                font-size: 28px;
+            }
+
+            .top-controls {
+                max-width: 200px;
+                font-size: 12px;
+            }
+
+            .controls {
+                left: 5px;
+                right: 5px;
+            }
+
+            .settings-panel {
+                right: 5px;
             }
         }
     </style>
 </head>
 <body>
-    <div id="map"></div>
+    <!-- Map section -->
+    <div id="map">
+        <!-- Sun position badge -->
+        <div class="sun-badge" id="sun-badge">☀ Loading...</div>
 
-    <!-- Sun position badge -->
-    <div class="sun-badge" id="sun-badge">☀ Loading...</div>
-
-    <!-- Top info panel -->
-    <div class="top-controls">
-        <h2>🏔️ 3D Solar Terrain</h2>
-        <span class="badge">SOLAR + 3D</span>
-        <p style="margin-top: 10px; font-size: 13px; color: #ccc;">Click anywhere on the map to analyze sun exposure and terrain data</p>
-    </div>
-
-    <!-- Settings panel -->
-    <div class="settings-panel">
-        <h3>⚙️ 3D Controls</h3>
-        <div class="slider-container">
-            <label>Terrain Height</label>
-            <input type="range" min="1" max="5" step="0.5" value="1" class="slider" id="exaggeration">
-            <div class="value-display" id="exag-value">1x</div>
-        </div>
-        <div class="slider-container">
-            <label>Camera Angle</label>
-            <input type="range" min="0" max="85" step="1" value="75" class="slider" id="pitch">
-            <div class="value-display" id="pitch-value">75°</div>
-        </div>
-    </div>
-
-    <!-- Bottom controls -->
-    <div class="controls">
-        <button class="btn" onclick="flyToGrandCanyon()">Grand Canyon</button>
-        <button class="btn" onclick="flyToEverest()">Mt. Everest</button>
-        <button class="btn" onclick="flyToAlps()">Swiss Alps</button>
-        <button class="btn" onclick="flyToYosemite()">Yosemite</button>
-    </div>
-
-    <!-- Solar data sidebar -->
-    <div class="solar-sidebar" id="solar-sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-title">☀ Solar Analysis</div>
-            <button class="collapse-btn" id="collapse-btn">→</button>
+        <!-- Top info panel -->
+        <div class="top-controls">
+            <h2>🏔️ 3D Solar Terrain</h2>
+            <span class="badge">SOLAR + 3D</span>
+            <p style="margin-top: 10px; font-size: 13px; color: #ccc;">Click anywhere to analyze</p>
         </div>
 
-        <div class="sidebar-content">
+        <!-- Settings panel -->
+        <div class="settings-panel">
+            <h3>⚙️ 3D Controls</h3>
+            <div class="slider-container">
+                <label>Terrain Height</label>
+                <input type="range" min="1" max="5" step="0.5" value="1" class="slider" id="exaggeration">
+                <div class="value-display" id="exag-value">1x</div>
+            </div>
+            <div class="slider-container">
+                <label>Camera Angle</label>
+                <input type="range" min="0" max="85" step="1" value="75" class="slider" id="pitch">
+                <div class="value-display" id="pitch-value">75°</div>
+            </div>
+        </div>
+
+        <!-- Bottom controls -->
+        <div class="controls">
+            <button class="btn" onclick="flyToGrandCanyon()">Grand Canyon</button>
+            <button class="btn" onclick="flyToEverest()">Mt. Everest</button>
+            <button class="btn" onclick="flyToAlps()">Swiss Alps</button>
+            <button class="btn" onclick="flyToYosemite()">Yosemite</button>
+        </div>
+
+        <!-- Scroll indicator -->
+        <div class="scroll-indicator" id="scroll-indicator" style="display: none;">
+            <div class="scroll-indicator-text">Scroll down for solar data</div>
+            <div class="scroll-arrow">⬇</div>
+        </div>
+    </div>
+
+    <!-- Solar data section - below map -->
+    <div class="solar-section">
+        <div class="solar-container">
             <!-- Empty state -->
             <div class="empty-state" id="empty-state">
                 <div class="empty-state-icon">📍</div>
-                <div class="empty-state-text">Click anywhere on the map to analyze sun exposure and terrain data for that location</div>
+                <div class="empty-state-text">Click anywhere on the map above to analyze sun exposure and terrain data for that location</div>
             </div>
 
             <!-- Solar data (hidden until clicked) -->
             <div id="solar-data" style="display: none;">
+                <!-- Header -->
+                <div class="solar-header">
+                    <h1>☀ Solar Analysis</h1>
+                    <p>Comprehensive terrain and sun exposure data</p>
+                </div>
+
                 <!-- Location -->
                 <div class="section">
-                    <div class="section-title">Location</div>
+                    <div class="section-title">📍 Location</div>
                     <div class="location-card">
                         <div class="location-title">Coordinates</div>
                         <div class="location-coords" id="location-coords">--</div>
@@ -513,7 +577,7 @@
 
                 <!-- Terrain stats -->
                 <div class="section">
-                    <div class="section-title">Terrain</div>
+                    <div class="section-title">🏔️ Terrain Data</div>
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-label">Elevation</div>
@@ -523,16 +587,16 @@
                             </div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-label">Slope</div>
+                            <div class="stat-label">Slope Angle</div>
                             <div>
                                 <span class="stat-value" id="slope-value">--</span>
                                 <span class="stat-unit">°</span>
                             </div>
                         </div>
-                        <div class="stat-card" style="grid-column: 1 / -1;">
-                            <div class="stat-label">Aspect</div>
+                        <div class="stat-card">
+                            <div class="stat-label">Slope Aspect</div>
                             <div>
-                                <span class="stat-value" id="aspect-value">--</span>
+                                <span class="stat-value" id="aspect-value" style="font-size: 18px;">--</span>
                             </div>
                         </div>
                     </div>
@@ -540,7 +604,7 @@
 
                 <!-- Sun timeline -->
                 <div class="section">
-                    <div class="section-title">Sun Times</div>
+                    <div class="section-title">🌅 Sun Times</div>
                     <div class="sun-timeline">
                         <div class="timeline-header">
                             <div class="timeline-item">
@@ -557,7 +621,7 @@
 
                 <!-- Current exposure -->
                 <div class="section">
-                    <div class="section-title">Current Sun Exposure</div>
+                    <div class="section-title">☀️ Current Sun Exposure</div>
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-label">Exposure</div>
@@ -569,7 +633,7 @@
                         <div class="stat-card">
                             <div class="stat-label">Status</div>
                             <div>
-                                <span class="stat-value" id="sun-status" style="font-size: 16px;">--</span>
+                                <span class="stat-value" id="sun-status" style="font-size: 24px;">--</span>
                             </div>
                         </div>
                     </div>
@@ -577,10 +641,10 @@
 
                 <!-- Hourly exposure chart -->
                 <div class="section">
-                    <div class="section-title">Hourly Sun Exposure</div>
+                    <div class="section-title">📊 Hourly Sun Exposure</div>
                     <div class="exposure-chart">
-                        <div style="font-size: 13px; color: #999; margin-bottom: 8px;">
-                            Total sun hours: <span id="total-sun-hours" style="color: #fff; font-weight: 600;">--</span>
+                        <div class="chart-info">
+                            Total sun hours: <span id="total-sun-hours">--</span>
                         </div>
                         <div class="chart-bars" id="exposure-bars">
                             <!-- Dynamic hourly bars -->
@@ -608,9 +672,21 @@
     <script src="solar-terrain.js"></script>
 
     <script>
-        // Collapse button
-        document.getElementById('collapse-btn').addEventListener('click', () => {
-            document.getElementById('solar-sidebar').classList.toggle('collapsed');
+        // Show scroll indicator after map loads
+        setTimeout(() => {
+            const indicator = document.getElementById('scroll-indicator');
+            if (indicator) {
+                indicator.style.display = 'block';
+            }
+        }, 3000);
+
+        // Hide scroll indicator when user scrolls
+        let scrollTimeout;
+        window.addEventListener('scroll', () => {
+            const indicator = document.getElementById('scroll-indicator');
+            if (window.scrollY > 100 && indicator) {
+                indicator.style.display = 'none';
+            }
         });
     </script>
 </body>
