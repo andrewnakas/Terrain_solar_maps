@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 2.0 - Updated sun time calculations
+ * Version: 2.1 - Fixed elevation and sun time accuracy
  */
 
 let map;
@@ -379,31 +379,41 @@ async function getTerrainData(lat, lng, zoom) {
         return terrainCache.get(key);
     }
 
+    // Wait for terrain to be fully loaded and rendered
+    await new Promise(resolve => setTimeout(resolve, 200));
+
     // Use MapLibre's terrain elevation query - it already has the data loaded!
-    const elevation = map.queryTerrainElevation([lng, lat]);
+    const elevation = map.queryTerrainElevation([lng, lat], { exaggerated: false });
 
     if (elevation === null || elevation === undefined) {
-        console.error('MapLibre returned null elevation');
+        console.error('MapLibre returned null elevation at', lat, lng);
         return null;
     }
 
     console.log(`Elevation from MapLibre: ${elevation.toFixed(2)}m`);
 
-    // Calculate slope and aspect using nearby points
+    // Calculate slope and aspect using nearby points (same as original solar calculator)
     const delta = 0.0001; // ~11 meters
-    const elevNorth = map.queryTerrainElevation([lng, lat + delta]) || elevation;
-    const elevSouth = map.queryTerrainElevation([lng, lat - delta]) || elevation;
-    const elevEast = map.queryTerrainElevation([lng + delta, lat]) || elevation;
-    const elevWest = map.queryTerrainElevation([lng - delta, lat]) || elevation;
+    const elevNorth = map.queryTerrainElevation([lng, lat + delta], { exaggerated: false });
+    const elevSouth = map.queryTerrainElevation([lng, lat - delta], { exaggerated: false });
+    const elevEast = map.queryTerrainElevation([lng + delta, lat], { exaggerated: false });
+    const elevWest = map.queryTerrainElevation([lng - delta, lat], { exaggerated: false });
 
-    // Calculate slope and aspect
+    // If any surrounding point is null, use center elevation
+    const elevN = elevNorth !== null ? elevNorth : elevation;
+    const elevS = elevSouth !== null ? elevSouth : elevation;
+    const elevE = elevEast !== null ? elevEast : elevation;
+    const elevW = elevWest !== null ? elevWest : elevation;
+
+    // Calculate slope and aspect (same formula as original)
     const metersPerDegree = 111320 * Math.cos(lat * Math.PI / 180);
-    const dzdx = (elevEast - elevWest) / (2 * delta * metersPerDegree);
-    const dzdy = (elevSouth - elevNorth) / (2 * delta * 111320);
+    const dzdx = (elevE - elevW) / (2 * delta * metersPerDegree);
+    const dzdy = (elevS - elevN) / (2 * delta * 111320);
 
     const slopeRad = Math.atan(Math.sqrt(dzdx * dzdx + dzdy * dzdy));
     const slope = slopeRad * 180 / Math.PI;
 
+    // Calculate aspect using standard GIS formula (same as original)
     let mathAspect = Math.atan2(dzdy, -dzdx) * 180 / Math.PI;
     let aspect = 90 - mathAspect;
 
@@ -454,14 +464,14 @@ async function calculateExposure(aspect, slope, elevation, lat, lng) {
     return exposure;
 }
 
-// Calculate shadow using MapLibre terrain
+// Calculate shadow using MapLibre terrain (same as original solar calculator)
 function calculateShadow(lat, lng, elevation) {
     if (sunAltitude < 0) {
         return 0;
     }
 
-    const maxDistance = 5000;
-    const stepSize = 100;
+    const maxDistance = 5000; // 5km max distance
+    const stepSize = 100; // Check every 100m
 
     const sunAzRad = sunAzimuth * Math.PI / 180;
     const sunAltRad = sunAltitude * Math.PI / 180;
@@ -482,14 +492,14 @@ function calculateShadow(lat, lng, elevation) {
         currentLng += lngStep;
 
         const rayHeight = elevation + distance * Math.tan(sunAltRad);
-        const terrainHeight = map.queryTerrainElevation([currentLng, currentLat]);
+        const terrainHeight = map.queryTerrainElevation([currentLng, currentLat], { exaggerated: false });
 
         if (terrainHeight === null || terrainHeight === undefined) break;
-        if (terrainHeight > rayHeight) return 0;
-        if (rayHeight - terrainHeight > 500) break;
+        if (terrainHeight > rayHeight) return 0; // Shadow detected
+        if (rayHeight - terrainHeight > 500) break; // Ray is far above terrain
     }
 
-    return 1;
+    return 1; // No shadow
 }
 
 // Calculate terrain-aware sun times (when sun clears terrain obstacles)
@@ -546,10 +556,10 @@ function calculateTerrainSunTimes(lat, lng, elevation) {
     };
 }
 
-// Check if terrain blocks sun at given azimuth and altitude
+// Check if terrain blocks sun at given azimuth and altitude (same as original)
 function checkTerrainBlocking(lat, lng, elevation, azimuth, altitude) {
-    const maxDistance = 5000;
-    const stepSize = 200;
+    const maxDistance = 5000; // 5km max
+    const stepSize = 200; // Coarser sampling for speed
 
     const azRad = azimuth * Math.PI / 180;
     const altRad = altitude * Math.PI / 180;
@@ -570,11 +580,11 @@ function checkTerrainBlocking(lat, lng, elevation, azimuth, altitude) {
         currentLng += lngStep;
 
         const rayHeight = elevation + distance * Math.tan(altRad);
-        const terrainHeight = map.queryTerrainElevation([currentLng, currentLat]);
+        const terrainHeight = map.queryTerrainElevation([currentLng, currentLat], { exaggerated: false });
 
         if (terrainHeight === null || terrainHeight === undefined) break;
         if (terrainHeight > rayHeight) return true; // Blocked
-        if (rayHeight - terrainHeight > 500) break;
+        if (rayHeight - terrainHeight > 500) break; // Ray far above
     }
 
     return false; // Not blocked
