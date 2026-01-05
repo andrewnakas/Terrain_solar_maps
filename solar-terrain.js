@@ -8,8 +8,8 @@ let currentExaggeration = 1;
 let clickMarker = null;
 let terrainCache = new Map();
 let tileCache = new Map();
-const tileSize = 512;
-const terrainTileUrl = 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp';
+const tileSize = 256;  // AWS Terrarium tiles are 256x256
+const terrainTileUrl = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 
 // Sun position
 let sunAzimuth = 0;
@@ -236,9 +236,9 @@ async function showPointInfo(lat, lng) {
         const terrainData = await getTerrainData(lat, lng, zoom);
 
         if (!terrainData) {
-            console.error('No terrain data available');
+            console.error('No terrain data available for this location');
             document.getElementById('loading').classList.remove('active');
-            alert('No terrain data available for this location. Try a different area.');
+            alert('No terrain data available for this location. Try a different area or check the browser console (F12) for details.');
             return;
         }
 
@@ -353,6 +353,8 @@ async function loadTerrainTile(tileX, tileY, zoom) {
             .replace('{x}', tileX)
             .replace('{y}', tileY);
 
+        console.log('Loading terrain tile:', url);
+
         const img = await loadImage(url);
 
         const canvas = document.createElement('canvas');
@@ -363,6 +365,21 @@ async function loadTerrainTile(tileX, tileY, zoom) {
 
         const imageData = ctx.getImageData(0, 0, tileSize, tileSize);
 
+        // Check if we got valid data
+        let hasData = false;
+        for (let i = 0; i < Math.min(1000, imageData.data.length); i += 4) {
+            if (imageData.data[i] !== 0 || imageData.data[i+1] !== 0 || imageData.data[i+2] !== 0) {
+                hasData = true;
+                break;
+            }
+        }
+
+        if (!hasData) {
+            console.warn('Terrain tile appears to be empty');
+        } else {
+            console.log('Terrain tile loaded successfully');
+        }
+
         tileCache.set(tileKey, imageData);
 
         if (tileCache.size > 50) {
@@ -372,7 +389,7 @@ async function loadTerrainTile(tileX, tileY, zoom) {
 
         return imageData;
     } catch (error) {
-        console.error('Error loading terrain tile:', error);
+        console.error('Error loading terrain tile:', tileKey, error);
         return null;
     }
 }
@@ -396,9 +413,12 @@ function decodeTerrainRGB(r, g, b) {
 // Get real elevation
 async function getRealElevation(lat, lng, zoom) {
     const tile = latLngToTile(lat, lng, zoom);
+    console.log(`Getting elevation for ${lat.toFixed(4)}, ${lng.toFixed(4)} at zoom ${zoom}, tile: ${tile.x},${tile.y},${tile.z}`);
+
     const tileData = await loadTerrainTile(tile.x, tile.y, zoom);
 
     if (!tileData) {
+        console.error('Failed to load tile data');
         return null;
     }
 
@@ -409,7 +429,10 @@ async function getRealElevation(lat, lng, zoom) {
     const pixelX = Math.floor((worldX - tile.x) * tileSize);
     const pixelY = Math.floor((worldY - tile.y) * tileSize);
 
+    console.log(`Pixel position: ${pixelX}, ${pixelY} (tile size: ${tileSize})`);
+
     if (pixelX < 0 || pixelX >= tileSize || pixelY < 0 || pixelY >= tileSize) {
+        console.error('Pixel coordinates out of bounds');
         return null;
     }
 
@@ -418,11 +441,17 @@ async function getRealElevation(lat, lng, zoom) {
     const g = tileData.data[idx + 1];
     const b = tileData.data[idx + 2];
 
+    console.log(`RGB values at pixel: ${r}, ${g}, ${b}`);
+
     if (r === 0 && g === 0 && b === 0) {
+        console.warn('Pixel has no data (all zeros)');
         return null;
     }
 
-    return decodeTerrainRGB(r, g, b);
+    const elevation = decodeTerrainRGB(r, g, b);
+    console.log(`Decoded elevation: ${elevation.toFixed(2)}m`);
+
+    return elevation;
 }
 
 // Calculate slope and aspect
