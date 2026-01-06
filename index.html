@@ -650,6 +650,11 @@
             z-index: 1;
         }
 
+        /* Hide fullscreen control button - forced fullscreen mode */
+        .maplibregl-ctrl-fullscreen {
+            display: none !important;
+        }
+
         /* Scroll indicator */
         .scroll-indicator {
             position: absolute;
@@ -1019,7 +1024,7 @@
     </div>
 
     <!-- Main App Script -->
-    <script src="solar-terrain.js?v=3.2"></script>
+    <script src="solar-terrain.js?v=3.3"></script>
 
     <script>
         // Toggle settings panel

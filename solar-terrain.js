@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 3.2 - Fixed solar modal visibility in fullscreen mode
+ * Version: 3.3 - Auto-enter fullscreen mode, prevent exiting fullscreen
  */
 
 let map;
@@ -124,6 +124,11 @@ map.on('load', () => {
             duration: 2000
         });
     }, 1000);
+
+    // Enter fullscreen mode automatically
+    setTimeout(() => {
+        enterFullscreen();
+    }, 500);
 });
 
 // Update compass on map rotation
@@ -139,6 +144,61 @@ map.on('load', () => {
     const bearing = map.getBearing();
     if (typeof updateCompass === 'function') {
         updateCompass(bearing);
+    }
+});
+
+// Fullscreen functions
+function enterFullscreen() {
+    const mapElement = document.getElementById('map');
+    if (mapElement) {
+        if (mapElement.requestFullscreen) {
+            mapElement.requestFullscreen().catch(err => {
+                console.log('Fullscreen request failed:', err);
+            });
+        } else if (mapElement.webkitRequestFullscreen) {
+            mapElement.webkitRequestFullscreen();
+        } else if (mapElement.mozRequestFullScreen) {
+            mapElement.mozRequestFullScreen();
+        } else if (mapElement.msRequestFullscreen) {
+            mapElement.msRequestFullscreen();
+        }
+    }
+}
+
+// Prevent exiting fullscreen - automatically re-enter if user exits
+document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+        // User exited fullscreen, re-enter it
+        setTimeout(() => {
+            enterFullscreen();
+        }, 100);
+    }
+});
+
+// Handle webkit browsers
+document.addEventListener('webkitfullscreenchange', () => {
+    if (!document.webkitFullscreenElement) {
+        setTimeout(() => {
+            enterFullscreen();
+        }, 100);
+    }
+});
+
+// Handle Firefox
+document.addEventListener('mozfullscreenchange', () => {
+    if (!document.mozFullScreenElement) {
+        setTimeout(() => {
+            enterFullscreen();
+        }, 100);
+    }
+});
+
+// Handle IE/Edge
+document.addEventListener('MSFullscreenChange', () => {
+    if (!document.msFullscreenElement) {
+        setTimeout(() => {
+            enterFullscreen();
+        }, 100);
     }
 });
 
