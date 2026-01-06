@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 2.5 - 3D compass, collapsible locations, maximized screen real estate
+ * Version: 3.0 - HUD-style rotating compass, solar data popup modal
  */
 
 let map;
@@ -351,17 +351,10 @@ async function showPointInfo(lat, lng) {
             return;
         }
 
-        // Hide empty state, show solar data
-        document.getElementById('empty-state').style.display = 'none';
-        document.getElementById('solar-data').style.display = 'block';
-
-        // Scroll to solar section smoothly
-        setTimeout(() => {
-            const solarSection = document.querySelector('.solar-section');
-            if (solarSection) {
-                solarSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }, 300);
+        // Open solar data modal
+        if (typeof openSolarModal === 'function') {
+            openSolarModal();
+        }
 
         // Update location
         document.getElementById('location-coords').textContent =

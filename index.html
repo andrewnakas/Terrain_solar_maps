@@ -34,19 +34,65 @@
             min-height: 600px;
         }
 
-        /* Solar data section - below the map */
-        .solar-section {
-            position: relative;
+        /* Solar data modal/popup */
+        .solar-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
-            background: linear-gradient(to bottom, #1a1a1a, #0a0a0a);
-            color: white;
-            padding: 40px 20px;
-            min-height: 100vh;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .solar-modal.active {
+            display: flex;
         }
 
         .solar-container {
-            max-width: 1200px;
-            margin: 0 auto;
+            max-width: 900px;
+            max-height: 90vh;
+            background: linear-gradient(to bottom, #1a1a1a, #0a0a0a);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+            border: 2px solid rgba(255, 107, 53, 0.3);
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .solar-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 107, 53, 0.2);
+            border: 2px solid rgba(255, 107, 53, 0.4);
+            border-radius: 50%;
+            color: #ff6b35;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+
+        .solar-close:hover {
+            background: rgba(255, 107, 53, 0.4);
+            transform: scale(1.1);
+        }
+
+        .solar-content {
+            padding: 40px 30px;
+            color: white;
         }
 
         .solar-header {
@@ -249,105 +295,126 @@
             line-height: 1.6;
         }
 
-        /* 3D Compass heading indicator */
+        /* 3D HUD Compass */
         .compass-hud {
             position: absolute;
-            top: 10px;
+            top: 15px;
             left: 50%;
             transform: translateX(-50%);
-            background: linear-gradient(145deg, rgba(30, 30, 30, 0.95), rgba(10, 10, 10, 0.95));
-            border: 2px solid rgba(255, 107, 53, 0.3);
-            border-radius: 50%;
-            padding: 0;
-            box-shadow:
-                0 8px 20px rgba(0, 0, 0, 0.8),
-                inset 0 2px 4px rgba(255, 255, 255, 0.1),
-                inset 0 -2px 4px rgba(0, 0, 0, 0.5);
-            z-index: 1;
-            backdrop-filter: blur(10px);
-            width: 120px;
-            height: 120px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
+            width: 140px;
+            height: 140px;
+            z-index: 1000;
         }
 
-        .compass-outer-ring {
+        .compass-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(20, 20, 20, 0.95), rgba(5, 5, 5, 0.98));
+            border-radius: 50%;
+            box-shadow:
+                0 10px 30px rgba(0, 0, 0, 0.9),
+                inset 0 0 20px rgba(0, 0, 0, 0.8),
+                inset 0 2px 4px rgba(255, 255, 255, 0.1);
+            border: 3px solid rgba(255, 107, 53, 0.4);
+        }
+
+        .compass-ring {
             position: absolute;
+            top: 50%;
+            left: 50%;
             width: 110px;
             height: 110px;
+            margin: -55px 0 0 -55px;
             border-radius: 50%;
-            border: 3px solid rgba(255, 107, 53, 0.4);
-            box-shadow:
-                0 0 10px rgba(255, 107, 53, 0.3),
-                inset 0 0 10px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+            border: 2px solid rgba(255, 107, 53, 0.3);
         }
 
-        .compass-inner {
-            position: relative;
-            width: 90px;
-            height: 90px;
+        .compass-tick {
+            position: absolute;
+            width: 2px;
+            height: 8px;
+            background: rgba(255, 107, 53, 0.6);
+            top: 0;
+            left: 50%;
+            margin-left: -1px;
+            transform-origin: 50% 55px;
+        }
+
+        .compass-tick.major {
+            height: 12px;
+            width: 3px;
+            margin-left: -1.5px;
+            background: rgba(255, 107, 53, 0.9);
+        }
+
+        .compass-label {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: 900;
+            color: #ff6b35;
+            text-shadow:
+                0 0 10px rgba(255, 107, 53, 0.8),
+                0 2px 4px rgba(0, 0, 0, 1);
+            transform-origin: 50% 43px;
+        }
+
+        .compass-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle at 40% 40%, rgba(40, 40, 40, 0.95), rgba(10, 10, 10, 0.98));
             border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, rgba(40, 40, 40, 0.9), rgba(15, 15, 15, 0.95));
             box-shadow:
-                inset 0 4px 8px rgba(0, 0, 0, 0.6),
-                inset 0 -2px 4px rgba(255, 255, 255, 0.05);
+                inset 0 4px 8px rgba(0, 0, 0, 0.8),
+                inset 0 -2px 4px rgba(255, 255, 255, 0.05),
+                0 0 15px rgba(255, 107, 53, 0.2);
+            border: 1px solid rgba(255, 107, 53, 0.3);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            flex-direction: column;
-            z-index: 2;
+            z-index: 10;
         }
 
-        .compass-arrow {
-            font-size: 32px;
-            transition: transform 0.3s ease;
-            display: inline-block;
+        .compass-needle-indicator {
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 12px solid #ff6b35;
             filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
-            text-shadow: 0 0 8px rgba(255, 107, 53, 0.6);
-            margin-bottom: -5px;
+            z-index: 5;
         }
 
         .compass-degrees {
             font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 14px;
-            font-weight: 700;
-            text-align: center;
+            font-size: 18px;
+            font-weight: 900;
             color: #ff6b35;
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-            margin-bottom: 2px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+            line-height: 1;
         }
 
         .compass-direction {
             font-family: 'Monaco', 'Courier New', monospace;
-            color: #ccc;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-        }
-
-        .compass-cardinal-marks {
-            position: absolute;
-            width: 100%;
-            height: 100%;
             font-size: 10px;
-            color: rgba(255, 107, 53, 0.6);
             font-weight: 700;
-        }
-
-        .compass-mark {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-        }
-
-        .compass-mark span {
-            position: absolute;
-            top: 5px;
+            color: #999;
+            letter-spacing: 1px;
+            margin-top: 2px;
         }
 
         /* Bottom controls - collapsible */
@@ -620,13 +687,42 @@
         }
 
         @media (max-width: 768px) {
-            #map {
-                height: 100vh;
-                min-height: 400px;
+            .compass-hud {
+                width: 110px;
+                height: 110px;
             }
 
-            .solar-section {
-                padding: 20px 15px;
+            .compass-ring {
+                width: 85px;
+                height: 85px;
+                margin: -42.5px 0 0 -42.5px;
+            }
+
+            .compass-tick {
+                transform-origin: 50% 42.5px;
+            }
+
+            .compass-label {
+                font-size: 13px;
+                top: 10px;
+                transform-origin: 50% 32.5px;
+            }
+
+            .compass-center {
+                width: 50px;
+                height: 50px;
+            }
+
+            .compass-degrees {
+                font-size: 15px;
+            }
+
+            .compass-direction {
+                font-size: 9px;
+            }
+
+            .solar-content {
+                padding: 30px 20px;
             }
 
             .solar-header h1 {
@@ -639,33 +735,6 @@
 
             .stat-value {
                 font-size: 28px;
-            }
-
-            .compass-hud {
-                width: 90px;
-                height: 90px;
-            }
-
-            .compass-outer-ring {
-                width: 82px;
-                height: 82px;
-            }
-
-            .compass-inner {
-                width: 68px;
-                height: 68px;
-            }
-
-            .compass-arrow {
-                font-size: 24px;
-            }
-
-            .compass-degrees {
-                font-size: 12px;
-            }
-
-            .compass-direction {
-                font-size: 10px;
             }
 
             .settings-panel {
@@ -686,13 +755,69 @@
 <body>
     <!-- Map section -->
     <div id="map">
-        <!-- 3D Compass HUD -->
+        <!-- 3D HUD Compass -->
         <div class="compass-hud">
-            <div class="compass-outer-ring"></div>
-            <div class="compass-inner">
-                <span class="compass-arrow" id="compass-arrow">⬆</span>
-                <span class="compass-degrees" id="compass-degrees">0°</span>
-                <span class="compass-direction" id="compass-direction">N</span>
+            <div class="compass-container">
+                <div class="compass-ring" id="compass-ring">
+                    <!-- Cardinal directions -->
+                    <div class="compass-label" style="transform: translateX(-50%) rotate(0deg);">N</div>
+                    <div class="compass-label" style="transform: translateX(-50%) rotate(90deg);">E</div>
+                    <div class="compass-label" style="transform: translateX(-50%) rotate(180deg);">S</div>
+                    <div class="compass-label" style="transform: translateX(-50%) rotate(270deg);">W</div>
+
+                    <!-- Tick marks every 10 degrees -->
+                    <!-- Major ticks at 0, 90, 180, 270 -->
+                    <div class="compass-tick major" style="transform: rotate(0deg);"></div>
+                    <div class="compass-tick major" style="transform: rotate(90deg);"></div>
+                    <div class="compass-tick major" style="transform: rotate(180deg);"></div>
+                    <div class="compass-tick major" style="transform: rotate(270deg);"></div>
+
+                    <!-- Minor ticks -->
+                    <div class="compass-tick" style="transform: rotate(10deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(20deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(30deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(40deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(50deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(60deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(70deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(80deg);"></div>
+
+                    <div class="compass-tick" style="transform: rotate(100deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(110deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(120deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(130deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(140deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(150deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(160deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(170deg);"></div>
+
+                    <div class="compass-tick" style="transform: rotate(190deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(200deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(210deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(220deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(230deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(240deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(250deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(260deg);"></div>
+
+                    <div class="compass-tick" style="transform: rotate(280deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(290deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(300deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(310deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(320deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(330deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(340deg);"></div>
+                    <div class="compass-tick" style="transform: rotate(350deg);"></div>
+                </div>
+
+                <!-- Fixed indicator at top -->
+                <div class="compass-needle-indicator"></div>
+
+                <!-- Center display -->
+                <div class="compass-center">
+                    <span class="compass-degrees" id="compass-degrees">0°</span>
+                    <span class="compass-direction" id="compass-direction">N</span>
+                </div>
             </div>
         </div>
 
@@ -736,24 +861,16 @@
             </div>
         </div>
 
-        <!-- Scroll indicator -->
-        <div class="scroll-indicator" id="scroll-indicator" style="display: none;">
-            <div class="scroll-indicator-text">Scroll down for solar data</div>
-            <div class="scroll-arrow">⬇</div>
-        </div>
     </div>
 
-    <!-- Solar data section - below map -->
-    <div class="solar-section">
+    <!-- Solar data modal popup -->
+    <div class="solar-modal" id="solar-modal">
         <div class="solar-container">
-            <!-- Empty state -->
-            <div class="empty-state" id="empty-state">
-                <div class="empty-state-icon">📍</div>
-                <div class="empty-state-text">Click anywhere on the map above to analyze sun exposure and terrain data for that location</div>
-            </div>
+            <!-- Close button -->
+            <div class="solar-close" onclick="closeSolarModal()">×</div>
 
-            <!-- Solar data (hidden until clicked) -->
-            <div id="solar-data" style="display: none;">
+            <!-- Solar data content -->
+            <div class="solar-content" id="solar-data">
                 <!-- Header -->
                 <div class="solar-header">
                     <h1>☀ Solar Analysis</h1>
@@ -897,7 +1014,7 @@
     </div>
 
     <!-- Main App Script -->
-    <script src="solar-terrain.js?v=2.5"></script>
+    <script src="solar-terrain.js?v=3.0"></script>
 
     <script>
         // Toggle settings panel
@@ -938,18 +1055,18 @@
             }
         }
 
-        // Update compass heading
+        // Update compass heading - rotates the compass ring
         function updateCompass(bearing) {
-            const arrow = document.getElementById('compass-arrow');
+            const compassRing = document.getElementById('compass-ring');
             const degrees = document.getElementById('compass-degrees');
             const direction = document.getElementById('compass-direction');
 
             // Normalize bearing to 0-360
             bearing = ((bearing % 360) + 360) % 360;
 
-            // Update arrow rotation (arrow points north, rotate by bearing)
-            if (arrow) {
-                arrow.style.transform = `rotate(${-bearing}deg)`;
+            // Rotate the compass ring opposite to bearing (so N aligns with bearing)
+            if (compassRing) {
+                compassRing.style.transform = `rotate(${-bearing}deg)`;
             }
 
             // Update degrees
@@ -965,20 +1082,27 @@
             }
         }
 
-        // Show scroll indicator after map loads
-        setTimeout(() => {
-            const indicator = document.getElementById('scroll-indicator');
-            if (indicator) {
-                indicator.style.display = 'block';
+        // Open solar data modal
+        function openSolarModal() {
+            const modal = document.getElementById('solar-modal');
+            if (modal) {
+                modal.classList.add('active');
             }
-        }, 3000);
+        }
 
-        // Hide scroll indicator when user scrolls
-        let scrollTimeout;
-        window.addEventListener('scroll', () => {
-            const indicator = document.getElementById('scroll-indicator');
-            if (window.scrollY > 100 && indicator) {
-                indicator.style.display = 'none';
+        // Close solar data modal
+        function closeSolarModal() {
+            const modal = document.getElementById('solar-modal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('click', (e) => {
+            const modal = document.getElementById('solar-modal');
+            if (e.target === modal) {
+                closeSolarModal();
             }
         });
     </script>
