@@ -117,7 +117,10 @@ map.on('load', () => {
     console.log('✅ Map loaded');
     updateSunPosition();
 
-    // Add hillshade layer for real-time terrain shading
+    // Make satellite layer semi-transparent so hillshade shows through
+    map.setPaintProperty('satellite', 'raster-opacity', 0.7);
+
+    // Add hillshade layer for real-time terrain shading with enhanced visibility
     map.addLayer({
         id: 'hillshade',
         type: 'hillshade',
@@ -126,14 +129,14 @@ map.on('load', () => {
             visibility: 'visible'
         },
         paint: {
-            'hillshade-exaggeration': 0.8,
-            'hillshade-shadow-color': '#000000',
+            'hillshade-exaggeration': 1.5,  // Increased for more pronounced shading
+            'hillshade-shadow-color': '#1a1a2e',  // Dark blue-black for shadows
             'hillshade-illumination-direction': 315,  // Will be updated by slider
             'hillshade-illumination-anchor': 'map',
-            'hillshade-accent-color': '#ff6b35',
-            'hillshade-highlight-color': '#ffd700'
+            'hillshade-accent-color': '#ff6b35',  // Orange accent for sun-facing slopes
+            'hillshade-highlight-color': '#ffd700'  // Golden highlights
         }
-    }, 'satellite');  // Add below satellite layer
+    });  // Add on top of satellite for visibility
 
     // Initialize time slider
     initializeTimeSlider();
@@ -307,9 +310,31 @@ function updateSunVisualization(minutes) {
 
     console.log(`Sun at ${simulationTime.toTimeString().slice(0, 5)}: altitude=${altitude.toFixed(1)}°, azimuth=${azimuth.toFixed(1)}°`);
 
-    // Update hillshade layer with sun direction
+    // Calculate brightness factor based on sun altitude
+    // Sun below horizon = dark (0), sun at zenith = bright (1)
+    const brightnessFactor = altitude > 0
+        ? Math.min(1, (altitude + 10) / 50)  // Gradual brightening
+        : Math.max(0, (altitude + 20) / 30);  // Twilight effect
+
+    // Update hillshade layer with sun direction and dynamic intensity
     if (map.getLayer('hillshade')) {
         map.setPaintProperty('hillshade', 'hillshade-illumination-direction', azimuth);
+
+        // Adjust hillshade exaggeration based on sun altitude
+        // Higher sun = more pronounced shading for better visibility
+        const hillshadeIntensity = altitude > 0 ? 1.2 + (altitude / 90) * 0.8 : 0.5;
+        map.setPaintProperty('hillshade', 'hillshade-exaggeration', hillshadeIntensity);
+    }
+
+    // Adjust satellite opacity based on time of day
+    // Brighter during day, darker at night/twilight
+    if (map.getLayer('satellite')) {
+        const satelliteOpacity = 0.4 + (brightnessFactor * 0.4);  // Range: 0.4 to 0.8
+        map.setPaintProperty('satellite', 'raster-opacity', satelliteOpacity);
+
+        // Adjust satellite brightness for day/night effect
+        const satelliteBrightness = altitude > 0 ? 0 : -0.5;  // Darker at night
+        map.setPaintProperty('satellite', 'raster-brightness-max', 1 + brightnessFactor * 0.2);
     }
 
     // Update sun rays visualization
