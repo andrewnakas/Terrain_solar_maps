@@ -866,150 +866,150 @@
             </div>
         </div>
 
-    </div>
+        <!-- Solar data modal popup -->
+        <div class="solar-modal" id="solar-modal">
+            <div class="solar-container">
+                <!-- Close button -->
+                <div class="solar-close" onclick="closeSolarModal()">×</div>
 
-    <!-- Solar data modal popup -->
-    <div class="solar-modal" id="solar-modal">
-        <div class="solar-container">
-            <!-- Close button -->
-            <div class="solar-close" onclick="closeSolarModal()">×</div>
-
-            <!-- Solar data content -->
-            <div class="solar-content" id="solar-data">
-                <!-- Header -->
-                <div class="solar-header">
-                    <h1>☀ Solar Analysis</h1>
-                    <p>Comprehensive terrain and sun exposure data</p>
-                </div>
-
-                <!-- Location -->
-                <div class="section">
-                    <div class="section-title">📍 Location</div>
-                    <div class="location-card">
-                        <div class="location-title">Coordinates</div>
-                        <div class="location-coords" id="location-coords">--</div>
+                <!-- Solar data content -->
+                <div class="solar-content" id="solar-data">
+                    <!-- Header -->
+                    <div class="solar-header">
+                        <h1>☀ Solar Analysis</h1>
+                        <p>Comprehensive terrain and sun exposure data</p>
                     </div>
-                </div>
 
-                <!-- Terrain stats -->
-                <div class="section">
-                    <div class="section-title">🏔️ Terrain Data</div>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">Elevation</div>
-                            <div>
-                                <span class="stat-value" id="elevation-value">--</span>
-                                <span class="stat-unit">m</span>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Slope Angle</div>
-                            <div>
-                                <span class="stat-value" id="slope-value">--</span>
-                                <span class="stat-unit">°</span>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Slope Aspect</div>
-                            <div>
-                                <span class="stat-value" id="aspect-value" style="font-size: 18px;">--</span>
-                            </div>
+                    <!-- Location -->
+                    <div class="section">
+                        <div class="section-title">📍 Location</div>
+                        <div class="location-card">
+                            <div class="location-title">Coordinates</div>
+                            <div class="location-coords" id="location-coords">--</div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Astronomical Sun Times -->
-                <div class="section">
-                    <div class="section-title">🌅 Horizon Sun Times</div>
-                    <div class="sun-timeline">
-                        <div class="timeline-header">
-                            <div class="timeline-item">
-                                <div class="timeline-label">Horizon Sunrise</div>
-                                <div class="timeline-value" id="astronomical-sunrise">--</div>
+                    <!-- Terrain stats -->
+                    <div class="section">
+                        <div class="section-title">🏔️ Terrain Data</div>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-label">Elevation</div>
+                                <div>
+                                    <span class="stat-value" id="elevation-value">--</span>
+                                    <span class="stat-unit">m</span>
+                                </div>
                             </div>
-                            <div class="timeline-item">
-                                <div class="timeline-label">Horizon Sunset</div>
-                                <div class="timeline-value" id="astronomical-sunset">--</div>
+                            <div class="stat-card">
+                                <div class="stat-label">Slope Angle</div>
+                                <div>
+                                    <span class="stat-value" id="slope-value">--</span>
+                                    <span class="stat-unit">°</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Slope Aspect</div>
+                                <div>
+                                    <span class="stat-value" id="aspect-value" style="font-size: 18px;">--</span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Terrain Sun Times -->
-                <div class="section">
-                    <div class="section-title">🏔️ Terrain-Aware Sun Times</div>
-                    <div class="sun-timeline">
-                        <div class="timeline-header">
-                            <div class="timeline-item">
-                                <div class="timeline-label">Terrain Sunrise</div>
-                                <div class="timeline-value" id="terrain-sunrise">--</div>
-                            </div>
-                            <div class="timeline-item">
-                                <div class="timeline-label">Terrain Sunset</div>
-                                <div class="timeline-value" id="terrain-sunset">--</div>
+                    <!-- Astronomical Sun Times -->
+                    <div class="section">
+                        <div class="section-title">🌅 Horizon Sun Times</div>
+                        <div class="sun-timeline">
+                            <div class="timeline-header">
+                                <div class="timeline-item">
+                                    <div class="timeline-label">Horizon Sunrise</div>
+                                    <div class="timeline-value" id="astronomical-sunrise">--</div>
+                                </div>
+                                <div class="timeline-item">
+                                    <div class="timeline-label">Horizon Sunset</div>
+                                    <div class="timeline-value" id="astronomical-sunset">--</div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Slope Sun Times -->
-                <div class="section">
-                    <div class="section-title">📐 Sun on This Slope</div>
-                    <div class="sun-timeline">
-                        <div class="timeline-header">
-                            <div class="timeline-item">
-                                <div class="timeline-label">Sun Hits Slope</div>
-                                <div class="timeline-value" id="slope-sun-start">--</div>
-                            </div>
-                            <div class="timeline-item">
-                                <div class="timeline-label">Sun Leaves Slope</div>
-                                <div class="timeline-value" id="slope-sun-end">--</div>
+                    <!-- Terrain Sun Times -->
+                    <div class="section">
+                        <div class="section-title">🏔️ Terrain-Aware Sun Times</div>
+                        <div class="sun-timeline">
+                            <div class="timeline-header">
+                                <div class="timeline-item">
+                                    <div class="timeline-label">Terrain Sunrise</div>
+                                    <div class="timeline-value" id="terrain-sunrise">--</div>
+                                </div>
+                                <div class="timeline-item">
+                                    <div class="timeline-label">Terrain Sunset</div>
+                                    <div class="timeline-value" id="terrain-sunset">--</div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Current exposure -->
-                <div class="section">
-                    <div class="section-title">☀️ Current Sun Exposure</div>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">Exposure</div>
-                            <div>
-                                <span class="stat-value" id="current-exposure">--</span>
-                                <span class="stat-unit">%</span>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Status</div>
-                            <div>
-                                <span class="stat-value" id="sun-status" style="font-size: 24px;">--</span>
+                    <!-- Slope Sun Times -->
+                    <div class="section">
+                        <div class="section-title">📐 Sun on This Slope</div>
+                        <div class="sun-timeline">
+                            <div class="timeline-header">
+                                <div class="timeline-item">
+                                    <div class="timeline-label">Sun Hits Slope</div>
+                                    <div class="timeline-value" id="slope-sun-start">--</div>
+                                </div>
+                                <div class="timeline-item">
+                                    <div class="timeline-label">Sun Leaves Slope</div>
+                                    <div class="timeline-value" id="slope-sun-end">--</div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Hourly exposure chart -->
-                <div class="section">
-                    <div class="section-title">📊 Hourly Sun Exposure</div>
-                    <div class="exposure-chart">
-                        <div class="chart-info">
-                            Total sun hours: <span id="total-sun-hours">--</span>
+                    <!-- Current exposure -->
+                    <div class="section">
+                        <div class="section-title">☀️ Current Sun Exposure</div>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-label">Exposure</div>
+                                <div>
+                                    <span class="stat-value" id="current-exposure">--</span>
+                                    <span class="stat-unit">%</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Status</div>
+                                <div>
+                                    <span class="stat-value" id="sun-status" style="font-size: 24px;">--</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="chart-bars" id="exposure-bars">
-                            <!-- Dynamic hourly bars -->
-                        </div>
-                        <div class="chart-labels">
-                            <span>00:00</span>
-                            <span>06:00</span>
-                            <span>12:00</span>
-                            <span>18:00</span>
-                            <span>24:00</span>
+                    </div>
+
+                    <!-- Hourly exposure chart -->
+                    <div class="section">
+                        <div class="section-title">📊 Hourly Sun Exposure</div>
+                        <div class="exposure-chart">
+                            <div class="chart-info">
+                                Total sun hours: <span id="total-sun-hours">--</span>
+                            </div>
+                            <div class="chart-bars" id="exposure-bars">
+                                <!-- Dynamic hourly bars -->
+                            </div>
+                            <div class="chart-labels">
+                                <span>00:00</span>
+                                <span>06:00</span>
+                                <span>12:00</span>
+                                <span>18:00</span>
+                                <span>24:00</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+
     </div>
 
     <!-- Loading indicator -->
@@ -1019,7 +1019,7 @@
     </div>
 
     <!-- Main App Script -->
-    <script src="solar-terrain.js?v=3.1"></script>
+    <script src="solar-terrain.js?v=3.2"></script>
 
     <script>
         // Toggle settings panel

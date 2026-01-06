@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 3.1 - Improved compass readability and locations button visibility
+ * Version: 3.2 - Fixed solar modal visibility in fullscreen mode
  */
 
 let map;
