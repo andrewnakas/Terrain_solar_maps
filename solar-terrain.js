@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 2.3 - Using manual tile loading like original solar calculator
+ * Version: 2.4 - UI updates: compass HUD, collapsible controls, Montana locations
  */
 
 let map;
@@ -126,6 +126,22 @@ map.on('load', () => {
     }, 1000);
 });
 
+// Update compass on map rotation
+map.on('rotate', () => {
+    const bearing = map.getBearing();
+    if (typeof updateCompass === 'function') {
+        updateCompass(bearing);
+    }
+});
+
+// Initialize compass on load
+map.on('load', () => {
+    const bearing = map.getBearing();
+    if (typeof updateCompass === 'function') {
+        updateCompass(bearing);
+    }
+});
+
 // Terrain exaggeration control
 document.getElementById('exaggeration').addEventListener('input', (e) => {
     const value = parseFloat(e.target.value);
@@ -146,6 +162,41 @@ document.getElementById('pitch').addEventListener('input', (e) => {
 });
 
 // Location presets
+// Montana locations
+function flyToBridgerBowl() {
+    map.flyTo({
+        center: [-110.903, 45.817],
+        zoom: 13,
+        pitch: 80,
+        bearing: 45,
+        duration: 3000,
+        essential: true
+    });
+}
+
+function flyToBigSky() {
+    map.flyTo({
+        center: [-111.403, 45.285],
+        zoom: 12.5,
+        pitch: 82,
+        bearing: -20,
+        duration: 3000,
+        essential: true
+    });
+}
+
+function flyToCookeCity() {
+    map.flyTo({
+        center: [-109.934, 45.020],
+        zoom: 13,
+        pitch: 78,
+        bearing: 90,
+        duration: 3000,
+        essential: true
+    });
+}
+
+// Other locations
 function flyToGrandCanyon() {
     map.flyTo({
         center: [-111.5, 36.1],

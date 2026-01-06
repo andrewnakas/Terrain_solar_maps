@@ -249,36 +249,42 @@
             line-height: 1.6;
         }
 
-        /* Top controls overlay on map */
-        .top-controls {
+        /* Compass heading indicator */
+        .compass-hud {
             position: absolute;
             top: 10px;
-            left: 10px;
+            left: 50%;
+            transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.85);
             color: white;
             border-radius: 8px;
-            padding: 15px;
+            padding: 8px 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
             z-index: 1;
             backdrop-filter: blur(10px);
-            max-width: 280px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .top-controls h2 {
-            margin: 0 0 10px 0;
-            font-size: 18px;
-            color: #fff;
-        }
-
-        .badge {
-            background: #ff6b35;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
+        .compass-arrow {
+            font-size: 20px;
+            transition: transform 0.3s ease;
             display: inline-block;
-            margin-top: 5px;
+        }
+
+        .compass-degrees {
+            min-width: 50px;
+            text-align: center;
+            color: #ff6b35;
+        }
+
+        .compass-direction {
+            color: #ccc;
+            font-size: 14px;
         }
 
         /* Bottom controls */
@@ -323,17 +329,54 @@
             background: rgba(0, 0, 0, 0.85);
             color: white;
             border-radius: 8px;
-            padding: 15px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
             z-index: 1;
             backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .settings-panel.minimized {
+            padding: 8px 12px;
+            min-width: auto;
+        }
+
+        .settings-panel.expanded {
+            padding: 15px;
             min-width: 220px;
         }
 
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
         .settings-panel h3 {
-            margin: 0 0 10px 0;
+            margin: 0;
             font-size: 14px;
             color: #fff;
+        }
+
+        .settings-toggle {
+            font-size: 16px;
+            transition: transform 0.3s ease;
+        }
+
+        .settings-toggle.expanded {
+            transform: rotate(180deg);
+        }
+
+        .settings-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .settings-content.expanded {
+            max-height: 300px;
+            margin-top: 10px;
         }
 
         .slider-container {
@@ -509,33 +552,41 @@
 <body>
     <!-- Map section -->
     <div id="map">
+        <!-- Compass HUD -->
+        <div class="compass-hud">
+            <span class="compass-arrow" id="compass-arrow">⬆</span>
+            <span class="compass-degrees" id="compass-degrees">0°</span>
+            <span class="compass-direction" id="compass-direction">N</span>
+        </div>
+
         <!-- Sun position badge -->
         <div class="sun-badge" id="sun-badge">☀ Loading...</div>
 
-        <!-- Top info panel -->
-        <div class="top-controls">
-            <h2>🏔️ 3D Solar Terrain</h2>
-            <span class="badge">SOLAR + 3D</span>
-            <p style="margin-top: 10px; font-size: 13px; color: #ccc;">Click anywhere to analyze</p>
-        </div>
-
-        <!-- Settings panel -->
-        <div class="settings-panel">
-            <h3>⚙️ 3D Controls</h3>
-            <div class="slider-container">
-                <label>Terrain Height</label>
-                <input type="range" min="1" max="5" step="0.5" value="1" class="slider" id="exaggeration">
-                <div class="value-display" id="exag-value">1x</div>
+        <!-- Settings panel (collapsible) -->
+        <div class="settings-panel minimized" id="settings-panel">
+            <div class="settings-header" onclick="toggleSettings()">
+                <h3>⚙️ 3D Controls</h3>
+                <span class="settings-toggle" id="settings-toggle">▼</span>
             </div>
-            <div class="slider-container">
-                <label>Camera Angle</label>
-                <input type="range" min="0" max="85" step="1" value="75" class="slider" id="pitch">
-                <div class="value-display" id="pitch-value">75°</div>
+            <div class="settings-content" id="settings-content">
+                <div class="slider-container">
+                    <label>Terrain Height</label>
+                    <input type="range" min="1" max="5" step="0.5" value="1" class="slider" id="exaggeration">
+                    <div class="value-display" id="exag-value">1x</div>
+                </div>
+                <div class="slider-container">
+                    <label>Camera Angle</label>
+                    <input type="range" min="0" max="85" step="1" value="75" class="slider" id="pitch">
+                    <div class="value-display" id="pitch-value">75°</div>
+                </div>
             </div>
         </div>
 
-        <!-- Bottom controls -->
+        <!-- Bottom controls - Quick select locations -->
         <div class="controls">
+            <button class="btn" onclick="flyToBridgerBowl()">Bridger Bowl</button>
+            <button class="btn" onclick="flyToBigSky()">Big Sky</button>
+            <button class="btn" onclick="flyToCookeCity()">Cooke City</button>
             <button class="btn" onclick="flyToGrandCanyon()">Grand Canyon</button>
             <button class="btn" onclick="flyToEverest()">Mt. Everest</button>
             <button class="btn" onclick="flyToAlps()">Swiss Alps</button>
@@ -703,9 +754,55 @@
     </div>
 
     <!-- Main App Script -->
-    <script src="solar-terrain.js?v=2.3"></script>
+    <script src="solar-terrain.js?v=2.4"></script>
 
     <script>
+        // Toggle settings panel
+        function toggleSettings() {
+            const panel = document.getElementById('settings-panel');
+            const content = document.getElementById('settings-content');
+            const toggle = document.getElementById('settings-toggle');
+
+            if (panel.classList.contains('minimized')) {
+                panel.classList.remove('minimized');
+                panel.classList.add('expanded');
+                content.classList.add('expanded');
+                toggle.classList.add('expanded');
+            } else {
+                panel.classList.add('minimized');
+                panel.classList.remove('expanded');
+                content.classList.remove('expanded');
+                toggle.classList.remove('expanded');
+            }
+        }
+
+        // Update compass heading
+        function updateCompass(bearing) {
+            const arrow = document.getElementById('compass-arrow');
+            const degrees = document.getElementById('compass-degrees');
+            const direction = document.getElementById('compass-direction');
+
+            // Normalize bearing to 0-360
+            bearing = ((bearing % 360) + 360) % 360;
+
+            // Update arrow rotation (arrow points north, rotate by bearing)
+            if (arrow) {
+                arrow.style.transform = `rotate(${-bearing}deg)`;
+            }
+
+            // Update degrees
+            if (degrees) {
+                degrees.textContent = Math.round(bearing) + '°';
+            }
+
+            // Update cardinal direction
+            if (direction) {
+                const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                const index = Math.round(bearing / 45) % 8;
+                direction.textContent = directions[index];
+            }
+        }
+
         // Show scroll indicator after map loads
         setTimeout(() => {
             const indicator = document.getElementById('scroll-indicator');
