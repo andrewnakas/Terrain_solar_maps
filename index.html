@@ -26,11 +26,11 @@
             background: #1a1a1a;
         }
 
-        /* Map container - larger, takes most of viewport */
+        /* Map container - maximize screen real estate */
         #map {
             position: relative;
             width: 100%;
-            height: 90vh;
+            height: 100vh;
             min-height: 600px;
         }
 
@@ -249,60 +249,168 @@
             line-height: 1.6;
         }
 
-        /* Compass heading indicator */
+        /* 3D Compass heading indicator */
         .compass-hud {
             position: absolute;
             top: 10px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            border-radius: 8px;
-            padding: 8px 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            background: linear-gradient(145deg, rgba(30, 30, 30, 0.95), rgba(10, 10, 10, 0.95));
+            border: 2px solid rgba(255, 107, 53, 0.3);
+            border-radius: 50%;
+            padding: 0;
+            box-shadow:
+                0 8px 20px rgba(0, 0, 0, 0.8),
+                inset 0 2px 4px rgba(255, 255, 255, 0.1),
+                inset 0 -2px 4px rgba(0, 0, 0, 0.5);
             z-index: 1;
             backdrop-filter: blur(10px);
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 16px;
-            font-weight: 700;
+            width: 120px;
+            height: 120px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .compass-outer-ring {
+            position: absolute;
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 107, 53, 0.4);
+            box-shadow:
+                0 0 10px rgba(255, 107, 53, 0.3),
+                inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .compass-inner {
+            position: relative;
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(40, 40, 40, 0.9), rgba(15, 15, 15, 0.95));
+            box-shadow:
+                inset 0 4px 8px rgba(0, 0, 0, 0.6),
+                inset 0 -2px 4px rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 2;
         }
 
         .compass-arrow {
-            font-size: 20px;
+            font-size: 32px;
             transition: transform 0.3s ease;
             display: inline-block;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
+            text-shadow: 0 0 8px rgba(255, 107, 53, 0.6);
+            margin-bottom: -5px;
         }
 
         .compass-degrees {
-            min-width: 50px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: 700;
             text-align: center;
             color: #ff6b35;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+            margin-bottom: 2px;
         }
 
         .compass-direction {
+            font-family: 'Monaco', 'Courier New', monospace;
             color: #ccc;
-            font-size: 14px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
         }
 
-        /* Bottom controls */
+        .compass-cardinal-marks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            font-size: 10px;
+            color: rgba(255, 107, 53, 0.6);
+            font-weight: 700;
+        }
+
+        .compass-mark {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        .compass-mark span {
+            position: absolute;
+            top: 5px;
+        }
+
+        /* Bottom controls - collapsible */
         .controls {
             position: absolute;
             bottom: 20px;
-            left: 10px;
-            right: 10px;
+            left: 50%;
+            transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.85);
             border-radius: 8px;
-            padding: 10px 15px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 1;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .controls.minimized {
+            padding: 8px 16px;
+        }
+
+        .controls.expanded {
+            padding: 10px 15px;
+            max-width: 90%;
+        }
+
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            gap: 10px;
+        }
+
+        .controls-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .controls-toggle {
+            font-size: 16px;
+            transition: transform 0.3s ease;
+        }
+
+        .controls-toggle.expanded {
+            transform: rotate(180deg);
+        }
+
+        .controls-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
             justify-content: center;
-            z-index: 1;
-            backdrop-filter: blur(10px);
+        }
+
+        .controls-content.expanded {
+            max-height: 200px;
+            margin-top: 10px;
         }
 
         .btn {
@@ -513,7 +621,7 @@
 
         @media (max-width: 768px) {
             #map {
-                height: 70vh;
+                height: 100vh;
                 min-height: 400px;
             }
 
@@ -533,18 +641,44 @@
                 font-size: 28px;
             }
 
-            .top-controls {
-                max-width: 200px;
+            .compass-hud {
+                width: 90px;
+                height: 90px;
+            }
+
+            .compass-outer-ring {
+                width: 82px;
+                height: 82px;
+            }
+
+            .compass-inner {
+                width: 68px;
+                height: 68px;
+            }
+
+            .compass-arrow {
+                font-size: 24px;
+            }
+
+            .compass-degrees {
                 font-size: 12px;
             }
 
-            .controls {
-                left: 5px;
-                right: 5px;
+            .compass-direction {
+                font-size: 10px;
             }
 
             .settings-panel {
                 right: 5px;
+            }
+
+            .controls {
+                bottom: 10px;
+            }
+
+            .btn {
+                padding: 8px 12px;
+                font-size: 12px;
             }
         }
     </style>
@@ -552,11 +686,14 @@
 <body>
     <!-- Map section -->
     <div id="map">
-        <!-- Compass HUD -->
+        <!-- 3D Compass HUD -->
         <div class="compass-hud">
-            <span class="compass-arrow" id="compass-arrow">⬆</span>
-            <span class="compass-degrees" id="compass-degrees">0°</span>
-            <span class="compass-direction" id="compass-direction">N</span>
+            <div class="compass-outer-ring"></div>
+            <div class="compass-inner">
+                <span class="compass-arrow" id="compass-arrow">⬆</span>
+                <span class="compass-degrees" id="compass-degrees">0°</span>
+                <span class="compass-direction" id="compass-direction">N</span>
+            </div>
         </div>
 
         <!-- Sun position badge -->
@@ -582,15 +719,21 @@
             </div>
         </div>
 
-        <!-- Bottom controls - Quick select locations -->
-        <div class="controls">
-            <button class="btn" onclick="flyToBridgerBowl()">Bridger Bowl</button>
-            <button class="btn" onclick="flyToBigSky()">Big Sky</button>
-            <button class="btn" onclick="flyToCookeCity()">Cooke City</button>
-            <button class="btn" onclick="flyToGrandCanyon()">Grand Canyon</button>
-            <button class="btn" onclick="flyToEverest()">Mt. Everest</button>
-            <button class="btn" onclick="flyToAlps()">Swiss Alps</button>
-            <button class="btn" onclick="flyToYosemite()">Yosemite</button>
+        <!-- Bottom controls - Quick select locations (collapsible) -->
+        <div class="controls minimized" id="location-controls">
+            <div class="controls-header" onclick="toggleLocations()">
+                <span class="controls-title">📍 Locations</span>
+                <span class="controls-toggle" id="locations-toggle">▼</span>
+            </div>
+            <div class="controls-content" id="locations-content">
+                <button class="btn" onclick="flyToBridgerBowl()">Bridger Bowl</button>
+                <button class="btn" onclick="flyToBigSky()">Big Sky</button>
+                <button class="btn" onclick="flyToCookeCity()">Cooke City</button>
+                <button class="btn" onclick="flyToGrandCanyon()">Grand Canyon</button>
+                <button class="btn" onclick="flyToEverest()">Mt. Everest</button>
+                <button class="btn" onclick="flyToAlps()">Swiss Alps</button>
+                <button class="btn" onclick="flyToYosemite()">Yosemite</button>
+            </div>
         </div>
 
         <!-- Scroll indicator -->
@@ -754,7 +897,7 @@
     </div>
 
     <!-- Main App Script -->
-    <script src="solar-terrain.js?v=2.4"></script>
+    <script src="solar-terrain.js?v=2.5"></script>
 
     <script>
         // Toggle settings panel
@@ -762,6 +905,25 @@
             const panel = document.getElementById('settings-panel');
             const content = document.getElementById('settings-content');
             const toggle = document.getElementById('settings-toggle');
+
+            if (panel.classList.contains('minimized')) {
+                panel.classList.remove('minimized');
+                panel.classList.add('expanded');
+                content.classList.add('expanded');
+                toggle.classList.add('expanded');
+            } else {
+                panel.classList.add('minimized');
+                panel.classList.remove('expanded');
+                content.classList.remove('expanded');
+                toggle.classList.remove('expanded');
+            }
+        }
+
+        // Toggle locations panel
+        function toggleLocations() {
+            const panel = document.getElementById('location-controls');
+            const content = document.getElementById('locations-content');
+            const toggle = document.getElementById('locations-toggle');
 
             if (panel.classList.contains('minimized')) {
                 panel.classList.remove('minimized');

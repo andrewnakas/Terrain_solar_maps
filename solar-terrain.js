@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 2.4 - UI updates: compass HUD, collapsible controls, Montana locations
+ * Version: 2.5 - 3D compass, collapsible locations, maximized screen real estate
  */
 
 let map;
