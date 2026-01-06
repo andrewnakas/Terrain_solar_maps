@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 3.3 - Auto-enter fullscreen mode, prevent exiting fullscreen
+ * Version: 3.4 - Improved accuracy: finer time resolution, better terrain blocking
  */
 
 let map;
@@ -725,20 +725,23 @@ async function calculateTerrainSunTimes(lat, lng, elevation) {
     let terrainSunrise = sunTimes.sunrise;
     let terrainSunset = sunTimes.sunset;
 
+    console.log(`Calculating terrain-aware sun times for elevation ${elevation.toFixed(1)}m`);
+
     // Check if terrain blocks sunrise (eastern mountains)
     if (sunTimes.sunrise && !isNaN(sunTimes.sunrise.getTime())) {
-        // Walk forward from astronomical sunrise
-        for (let i = 0; i < 180; i += 5) {
+        // Walk forward from astronomical sunrise, checking every 2 minutes for accuracy
+        for (let i = 0; i < 240; i += 2) {
             const testDate = new Date(sunTimes.sunrise.getTime() + i * 60 * 1000);
             const testPos = SunCalc.getPosition(testDate, lat, lng);
             const testAlt = testPos.altitude * 180 / Math.PI;
             const testAz = ((testPos.azimuth * 180 / Math.PI) + 180) % 360;
 
             if (testAlt > 0) {
-                // Quick check: is sun blocked by terrain?
+                // Check if sun is blocked by terrain
                 const isBlocked = await checkTerrainBlocking(lat, lng, elevation, testAz, testAlt);
                 if (!isBlocked) {
                     terrainSunrise = testDate;
+                    console.log(`Terrain sunrise: ${terrainSunrise.toTimeString().slice(0, 5)} (${i} min after astronomical)`);
                     break;
                 }
             }
@@ -747,8 +750,8 @@ async function calculateTerrainSunTimes(lat, lng, elevation) {
 
     // Check if terrain blocks sunset (western mountains)
     if (sunTimes.sunset && !isNaN(sunTimes.sunset.getTime())) {
-        // Walk backward from astronomical sunset
-        for (let i = 0; i < 180; i += 5) {
+        // Walk backward from astronomical sunset, checking every 2 minutes
+        for (let i = 0; i < 240; i += 2) {
             const testDate = new Date(sunTimes.sunset.getTime() - i * 60 * 1000);
             const testPos = SunCalc.getPosition(testDate, lat, lng);
             const testAlt = testPos.altitude * 180 / Math.PI;
@@ -758,6 +761,7 @@ async function calculateTerrainSunTimes(lat, lng, elevation) {
                 const isBlocked = await checkTerrainBlocking(lat, lng, elevation, testAz, testAlt);
                 if (!isBlocked) {
                     terrainSunset = testDate;
+                    console.log(`Terrain sunset: ${terrainSunset.toTimeString().slice(0, 5)} (${i} min before astronomical)`);
                 } else {
                     break;
                 }
@@ -773,8 +777,8 @@ async function calculateTerrainSunTimes(lat, lng, elevation) {
 
 // Check if terrain blocks sun at given azimuth and altitude (same as original)
 async function checkTerrainBlocking(lat, lng, elevation, azimuth, altitude) {
-    const maxDistance = 5000; // 5km max
-    const stepSize = 200; // Coarser sampling for speed
+    const maxDistance = 10000; // Increased to 10km for distant mountains
+    const stepSize = 100; // Reduced from 200m to 100m for better accuracy
     const zoom = Math.min(map.getZoom(), 12);
 
     const azRad = azimuth * Math.PI / 180;
@@ -798,9 +802,18 @@ async function checkTerrainBlocking(lat, lng, elevation, azimuth, altitude) {
         const rayHeight = elevation + distance * Math.tan(altRad);
         const terrainHeight = await getRealElevation(currentLat, currentLng, zoom);
 
-        if (terrainHeight === null) break;
-        if (terrainHeight > rayHeight) return true; // Blocked
-        if (rayHeight - terrainHeight > 500) break; // Ray far above
+        // If we can't get elevation data, assume not blocked and continue
+        if (terrainHeight === null) {
+            console.warn(`No elevation data at ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}`);
+            continue;
+        }
+
+        if (terrainHeight > rayHeight) {
+            console.log(`Terrain blocking detected at ${distance}m: terrain=${terrainHeight.toFixed(1)}m, ray=${rayHeight.toFixed(1)}m`);
+            return true; // Blocked
+        }
+
+        if (rayHeight - terrainHeight > 1000) break; // Ray far above terrain
     }
 
     return false; // Not blocked
@@ -817,9 +830,12 @@ async function calculateSlopeSunTimes(lat, lng, terrainData) {
     startOfDay.setHours(0, 0, 0, 0);
 
     let wasExposed = false;
+    let hasAnyExposure = false;
 
-    // Check every 15 minutes throughout the day
-    for (let minutes = 0; minutes < 1440; minutes += 15) {
+    console.log(`Calculating slope sun times for lat=${lat.toFixed(4)}, lng=${lng.toFixed(4)}, aspect=${terrainData.aspect.toFixed(1)}°, slope=${terrainData.slope.toFixed(1)}°`);
+
+    // Check every 5 minutes throughout the day for more accuracy
+    for (let minutes = 0; minutes < 1440; minutes += 5) {
         const testTime = new Date(startOfDay);
         testTime.setMinutes(minutes);
 
@@ -851,21 +867,30 @@ async function calculateSlopeSunTimes(lat, lng, terrainData) {
         const isExposed = !sunBlocked && slopeFacing;
 
         if (isExposed) {
+            hasAnyExposure = true;
             lastExposedTime = new Date(testTime);
 
             if (!wasExposed) {
                 slopeStartTime = new Date(testTime);
                 wasExposed = true;
+                console.log(`Slope sun starts at ${slopeStartTime.toTimeString().slice(0, 5)}`);
             }
         } else if (wasExposed) {
             slopeEndTime = new Date(testTime);
             wasExposed = false;
+            console.log(`Slope sun ends at ${slopeEndTime.toTimeString().slice(0, 5)}`);
         }
     }
 
     // If still exposed at end of day, use last exposure time
     if (wasExposed && lastExposedTime) {
         slopeEndTime = lastExposedTime;
+        console.log(`Slope sun ends at EOD: ${slopeEndTime.toTimeString().slice(0, 5)}`);
+    }
+
+    // Log if slope never gets sun
+    if (!hasAnyExposure) {
+        console.warn(`Slope at ${lat.toFixed(4)}, ${lng.toFixed(4)} receives no direct sun today (aspect=${terrainData.aspect.toFixed(1)}°, slope=${terrainData.slope.toFixed(1)}°)`);
     }
 
     return {
