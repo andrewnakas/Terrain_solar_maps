@@ -1,7 +1,7 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 3.4 - Improved accuracy: finer time resolution, better terrain blocking
+ * Version: 4.0 - Real-time sun visualization with 3D rays and terrain shading
  */
 
 let map;
@@ -117,6 +117,27 @@ map.on('load', () => {
     console.log('✅ Map loaded');
     updateSunPosition();
 
+    // Add hillshade layer for real-time terrain shading
+    map.addLayer({
+        id: 'hillshade',
+        type: 'hillshade',
+        source: 'terrarium-terrain',
+        layout: {
+            visibility: 'visible'
+        },
+        paint: {
+            'hillshade-exaggeration': 0.8,
+            'hillshade-shadow-color': '#000000',
+            'hillshade-illumination-direction': 315,  // Will be updated by slider
+            'hillshade-illumination-anchor': 'map',
+            'hillshade-accent-color': '#ff6b35',
+            'hillshade-highlight-color': '#ffd700'
+        }
+    }, 'satellite');  // Add below satellite layer
+
+    // Initialize time slider
+    initializeTimeSlider();
+
     setTimeout(() => {
         map.easeTo({
             pitch: 80,
@@ -201,6 +222,148 @@ document.addEventListener('MSFullscreenChange', () => {
         }, 100);
     }
 });
+
+// Time slider functionality for sun visualization
+let simulationTime = new Date();  // Current simulated time
+let sunRaysVisible = true;
+
+function initializeTimeSlider() {
+    const slider = document.getElementById('time-slider');
+    const display = document.getElementById('time-display');
+
+    // Set initial time to current time
+    const now = new Date();
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    slider.value = minutes;
+    updateTimeDisplay(minutes);
+
+    // Handle slider input
+    slider.addEventListener('input', (e) => {
+        const minutes = parseInt(e.target.value);
+        updateTimeDisplay(minutes);
+        updateSunVisualization(minutes);
+    });
+}
+
+function updateTimeDisplay(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const display = document.getElementById('time-display');
+    display.textContent = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+
+    // Update simulation time
+    simulationTime = new Date();
+    simulationTime.setHours(hours, mins, 0, 0);
+}
+
+function setTimeOfDay(preset) {
+    const center = map.getCenter();
+    const lat = center.lat;
+    const lng = center.lng;
+    const sunTimes = SunCalc.getTimes(new Date(), lat, lng);
+
+    let targetTime;
+    let minutes;
+
+    // Remove active class from all buttons
+    document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
+
+    switch(preset) {
+        case 'sunrise':
+            targetTime = sunTimes.sunrise;
+            event.target.classList.add('active');
+            break;
+        case 'noon':
+            targetTime = sunTimes.solarNoon;
+            event.target.classList.add('active');
+            break;
+        case 'sunset':
+            targetTime = sunTimes.sunset;
+            event.target.classList.add('active');
+            break;
+        case 'current':
+            targetTime = new Date();
+            event.target.classList.add('active');
+            break;
+    }
+
+    if (targetTime) {
+        minutes = targetTime.getHours() * 60 + targetTime.getMinutes();
+        document.getElementById('time-slider').value = minutes;
+        updateTimeDisplay(minutes);
+        updateSunVisualization(minutes);
+    }
+}
+
+function updateSunVisualization(minutes) {
+    const center = map.getCenter();
+    const lat = center.lat;
+    const lng = center.lng;
+
+    // Get sun position for the simulated time
+    const sunPos = SunCalc.getPosition(simulationTime, lat, lng);
+    const altitude = sunPos.altitude * 180 / Math.PI;
+    const azimuth = ((sunPos.azimuth * 180 / Math.PI) + 180) % 360;
+
+    console.log(`Sun at ${simulationTime.toTimeString().slice(0, 5)}: altitude=${altitude.toFixed(1)}°, azimuth=${azimuth.toFixed(1)}°`);
+
+    // Update hillshade layer with sun direction
+    if (map.getLayer('hillshade')) {
+        map.setPaintProperty('hillshade', 'hillshade-illumination-direction', azimuth);
+    }
+
+    // Update sun rays visualization
+    updateSunRays(azimuth, altitude);
+
+    // Update sun badge
+    const badge = document.getElementById('sun-badge');
+    if (altitude > 0) {
+        badge.textContent = `☀ ${altitude.toFixed(1)}° @ ${azimuth.toFixed(0)}°`;
+        badge.style.color = '#ffa500';
+    } else {
+        badge.textContent = `🌙 Below Horizon`;
+        badge.style.color = '#6b7280';
+    }
+}
+
+function updateSunRays(azimuth, altitude) {
+    // Remove existing sun rays
+    const existingRays = document.querySelectorAll('.sun-ray');
+    existingRays.forEach(ray => ray.remove());
+
+    if (altitude <= 0) return;  // No rays when sun is below horizon
+
+    // Create 5 sun rays emanating from the sun direction
+    const mapContainer = document.getElementById('map');
+    const numRays = 5;
+    const rayLength = 200;  // pixels
+
+    // Calculate screen position based on sun azimuth and altitude
+    // Higher altitude = closer to center, lower = toward edges
+    const altitudeNorm = Math.max(0, Math.min(1, altitude / 90));
+
+    for (let i = 0; i < numRays; i++) {
+        const ray = document.createElement('div');
+        ray.className = 'sun-ray';
+
+        // Position rays coming from sun direction
+        const angleOffset = (i - numRays/2) * 15;  // Spread rays out
+        const rayAngle = azimuth + angleOffset;
+
+        // Calculate ray position (opposite of sun direction, so rays come toward viewer)
+        const oppositeAzimuth = (rayAngle + 180) % 360;
+        const x = 50 + Math.sin(oppositeAzimuth * Math.PI / 180) * 30 * (1 - altitudeNorm);
+        const y = 50 - Math.cos(oppositeAzimuth * Math.PI / 180) * 30 * (1 - altitudeNorm);
+
+        ray.style.left = x + '%';
+        ray.style.top = y + '%';
+        ray.style.height = rayLength + 'px';
+        ray.style.transform = `translateX(-50%) rotate(${oppositeAzimuth}deg)`;
+        ray.style.opacity = altitudeNorm * 0.6;
+
+        mapContainer.appendChild(ray);
+    }
+}
 
 // Terrain exaggeration control
 document.getElementById('exaggeration').addEventListener('input', (e) => {

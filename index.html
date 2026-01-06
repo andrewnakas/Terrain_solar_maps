@@ -655,6 +655,128 @@
             display: none !important;
         }
 
+        /* Time slider for sun visualization */
+        .time-slider-container {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 12px;
+            padding: 15px 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 150;
+            min-width: 400px;
+            border: 2px solid rgba(255, 107, 53, 0.3);
+        }
+
+        .time-slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .time-slider-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .time-display {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 18px;
+            font-weight: 900;
+            color: #ff6b35;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+        }
+
+        .time-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right,
+                #1a1a2e 0%,
+                #ff6b35 25%,
+                #ffd700 50%,
+                #ff6b35 75%,
+                #1a1a2e 100%);
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .time-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ff6b35;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
+            border: 2px solid #fff;
+        }
+
+        .time-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ff6b35;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
+        }
+
+        .time-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+
+        .time-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 107, 53, 0.3);
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+            border: 1px solid rgba(255, 107, 53, 0.5);
+        }
+
+        .time-btn:hover {
+            background: rgba(255, 107, 53, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .time-btn.active {
+            background: #ff6b35;
+        }
+
+        /* 3D Sun indicator */
+        .sun-indicator {
+            position: absolute;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+
+        .sun-ray {
+            position: absolute;
+            width: 3px;
+            background: linear-gradient(to bottom,
+                rgba(255, 200, 50, 0.9),
+                rgba(255, 200, 50, 0));
+            border-radius: 2px;
+            transform-origin: top center;
+            box-shadow: 0 0 10px rgba(255, 200, 50, 0.6);
+            pointer-events: none;
+        }
+
         /* Scroll indicator */
         .scroll-indicator {
             position: absolute;
@@ -729,6 +851,25 @@
 
             .controls-title {
                 font-size: 14px;
+            }
+
+            .time-slider-container {
+                min-width: 90%;
+                bottom: 85px;
+                padding: 12px 18px;
+            }
+
+            .time-slider-title {
+                font-size: 12px;
+            }
+
+            .time-display {
+                font-size: 16px;
+            }
+
+            .time-btn {
+                padding: 5px 10px;
+                font-size: 11px;
             }
 
             .solar-content {
@@ -851,6 +992,21 @@
                     <input type="range" min="0" max="85" step="1" value="75" class="slider" id="pitch">
                     <div class="value-display" id="pitch-value">75°</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Time slider for sun visualization -->
+        <div class="time-slider-container">
+            <div class="time-slider-header">
+                <span class="time-slider-title">☀ Sun Position</span>
+                <span class="time-display" id="time-display">12:00</span>
+            </div>
+            <input type="range" min="0" max="1439" value="720" class="time-slider" id="time-slider" step="1">
+            <div class="time-controls">
+                <button class="time-btn" onclick="setTimeOfDay('sunrise')">Sunrise</button>
+                <button class="time-btn" onclick="setTimeOfDay('noon')">Noon</button>
+                <button class="time-btn" onclick="setTimeOfDay('sunset')">Sunset</button>
+                <button class="time-btn active" onclick="setTimeOfDay('current')">Now</button>
             </div>
         </div>
 
@@ -1024,7 +1180,7 @@
     </div>
 
     <!-- Main App Script -->
-    <script src="solar-terrain.js?v=3.4"></script>
+    <script src="solar-terrain.js?v=4.0"></script>
 
     <script>
         // Toggle settings panel
