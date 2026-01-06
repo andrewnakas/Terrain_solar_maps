@@ -117,10 +117,10 @@ map.on('load', () => {
     console.log('✅ Map loaded');
     updateSunPosition();
 
-    // Make satellite layer semi-transparent so hillshade shows through
-    map.setPaintProperty('satellite', 'raster-opacity', 0.7);
+    // Make satellite layer very transparent so hillshade dominates
+    map.setPaintProperty('satellite', 'raster-opacity', 0.35);
 
-    // Add hillshade layer for real-time terrain shading with enhanced visibility
+    // Add hillshade layer for real-time terrain shading with extreme contrast
     map.addLayer({
         id: 'hillshade',
         type: 'hillshade',
@@ -129,12 +129,12 @@ map.on('load', () => {
             visibility: 'visible'
         },
         paint: {
-            'hillshade-exaggeration': 1.5,  // Increased for more pronounced shading
-            'hillshade-shadow-color': '#1a1a2e',  // Dark blue-black for shadows
+            'hillshade-exaggeration': 3.5,  // Very high for extreme contrast
+            'hillshade-shadow-color': '#000000',  // Pure black shadows for maximum contrast
             'hillshade-illumination-direction': 315,  // Will be updated by slider
             'hillshade-illumination-anchor': 'map',
-            'hillshade-accent-color': '#ff6b35',  // Orange accent for sun-facing slopes
-            'hillshade-highlight-color': '#ffd700'  // Golden highlights
+            'hillshade-accent-color': '#ffffff',  // Pure white for sunlit slopes
+            'hillshade-highlight-color': '#ffffff'  // Pure white highlights
         }
     });  // Add on top of satellite for visibility
 
@@ -320,16 +320,16 @@ function updateSunVisualization(minutes) {
     if (map.getLayer('hillshade')) {
         map.setPaintProperty('hillshade', 'hillshade-illumination-direction', azimuth);
 
-        // Adjust hillshade exaggeration based on sun altitude
-        // Higher sun = more pronounced shading for better visibility
-        const hillshadeIntensity = altitude > 0 ? 1.2 + (altitude / 90) * 0.8 : 0.5;
+        // Extreme contrast: much higher exaggeration when sun is up
+        // This creates stark black shadows and bright sunlit slopes
+        const hillshadeIntensity = altitude > 0 ? 2.5 + (altitude / 90) * 2.5 : 0.3;  // Range: 2.5-5.0 during day
         map.setPaintProperty('hillshade', 'hillshade-exaggeration', hillshadeIntensity);
     }
 
     // Adjust satellite opacity based on time of day
-    // Brighter during day, darker at night/twilight
+    // Keep satellite very faint so hillshade contrast is visible
     if (map.getLayer('satellite')) {
-        const satelliteOpacity = 0.4 + (brightnessFactor * 0.4);  // Range: 0.4 to 0.8
+        const satelliteOpacity = 0.25 + (brightnessFactor * 0.25);  // Range: 0.25 to 0.5
         map.setPaintProperty('satellite', 'raster-opacity', satelliteOpacity);
 
         // Adjust satellite brightness for day/night effect
