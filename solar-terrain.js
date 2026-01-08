@@ -20,6 +20,11 @@ let sunAzimuth = 0;
 let sunAltitude = 0;
 let currentDate = new Date();
 
+// Custom hillshade rendering
+let customHillshadeCanvas = null;
+let customHillshadeLayer = null;
+let hillshadeGridResolution = 0.001; // ~111 meters at equator (similar to solar analysis resolution)
+
 // Initialize the map
 map = new maplibregl.Map({
     container: 'map',
@@ -118,28 +123,10 @@ map.on('load', () => {
     updateSunPosition();
 
     // Set satellite layer opacity to show terrain context
-    map.setPaintProperty('satellite', 'raster-opacity', 0.65);
+    map.setPaintProperty('satellite', 'raster-opacity', 0.7);
 
-    // Add hillshade layer with proper cartographic techniques
-    // Using 'combined' method which scales intensity with slope (GDAL standard)
-    // Standard practice: azimuth 315° (northwest), altitude 45°
-    // Exaggeration 0.5-1.0 for natural terrain visualization
-    map.addLayer({
-        id: 'hillshade',
-        type: 'hillshade',
-        source: 'terrarium-terrain',
-        layout: {
-            visibility: 'visible'
-        },
-        paint: {
-            'hillshade-exaggeration': 0.8,  // Moderate exaggeration for natural appearance
-            'hillshade-shadow-color': '#1a1a2e',  // Natural dark shadow color
-            'hillshade-illumination-direction': 315,  // Northwest (standard), updated by sun position
-            'hillshade-illumination-anchor': 'map',  // Relative to north, not viewport
-            'hillshade-accent-color': '#f4a460',  // Warm accent for sun-facing slopes
-            'hillshade-highlight-color': '#ffe4b5'  // Soft warm highlights
-        }
-    });  // Add on top of satellite for visibility
+    // Add custom hillshade canvas layer for accurate sun/shadow calculations
+    addCustomHillshadeLayer();
 
     // Initialize time slider
     initializeTimeSlider();
@@ -301,6 +288,222 @@ function setTimeOfDay(preset) {
     }
 }
 
+// Add custom hillshade layer using canvas
+function addCustomHillshadeLayer() {
+    // Create canvas source for custom hillshade
+    customHillshadeCanvas = document.createElement('canvas');
+
+    map.addSource('custom-hillshade', {
+        type: 'canvas',
+        canvas: customHillshadeCanvas,
+        coordinates: [[0, 0], [0, 0], [0, 0], [0, 0]], // Will be updated
+        animate: false
+    });
+
+    map.addLayer({
+        id: 'custom-hillshade-layer',
+        type: 'raster',
+        source: 'custom-hillshade',
+        paint: {
+            'raster-opacity': 0.6
+        }
+    });
+
+    // Trigger initial render
+    updateCustomHillshade();
+
+    // Update on map move/zoom
+    map.on('moveend', () => updateCustomHillshade());
+    map.on('zoomend', () => updateCustomHillshade());
+}
+
+// Update custom hillshade based on actual sun calculations
+async function updateCustomHillshade() {
+    if (!map || sunAltitude === undefined) return;
+
+    const bounds = map.getBounds();
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+
+    // Calculate grid dimensions
+    const latRange = ne.lat - sw.lat;
+    const lngRange = ne.lng - sw.lng;
+
+    const gridCols = Math.ceil(lngRange / hillshadeGridResolution);
+    const gridRows = Math.ceil(latRange / hillshadeGridResolution);
+
+    // Limit grid size for performance (max 200x200)
+    const maxDim = 200;
+    const scaleFactor = Math.max(gridCols / maxDim, gridRows / maxDim, 1);
+    const finalCols = Math.floor(gridCols / scaleFactor);
+    const finalRows = Math.floor(gridRows / scaleFactor);
+
+    console.log(`Rendering custom hillshade: ${finalCols}x${finalRows} grid`);
+
+    // Set canvas size
+    customHillshadeCanvas.width = finalCols;
+    customHillshadeCanvas.height = finalRows;
+    const ctx = customHillshadeCanvas.getContext('2d');
+
+    const imageData = ctx.createImageData(finalCols, finalRows);
+    const data = imageData.data;
+
+    const zoom = Math.min(map.getZoom(), 12);
+    const actualGridRes = hillshadeGridResolution * scaleFactor;
+
+    // Process each grid point
+    for (let row = 0; row < finalRows; row++) {
+        for (let col = 0; col < finalCols; col++) {
+            const lat = sw.lat + (row + 0.5) * actualGridRes;
+            const lng = sw.lng + (col + 0.5) * actualGridRes;
+
+            // Get cached terrain data or calculate
+            const terrainData = await getTerrainDataCached(lat, lng, zoom);
+
+            if (!terrainData) {
+                // No data - transparent
+                const idx = (row * finalCols + col) * 4;
+                data[idx] = 0;
+                data[idx + 1] = 0;
+                data[idx + 2] = 0;
+                data[idx + 3] = 0;
+                continue;
+            }
+
+            // Calculate sun-slope interaction
+            const { exposure, incidenceAngle } = await calculateExposureSimple(
+                terrainData.aspect,
+                terrainData.slope,
+                terrainData.elevation,
+                lat,
+                lng
+            );
+
+            // Color based on exposure: black for shadow, white for full sun
+            let brightness = 128; // Base gray
+
+            if (sunAltitude > 0) {
+                if (exposure > 0) {
+                    // In sun - brightness based on angle of incidence
+                    brightness = 128 + exposure * 127; // Range: 128-255
+                } else {
+                    // In shadow
+                    brightness = 0; // Black
+                }
+            }
+
+            const idx = (row * finalCols + col) * 4;
+            data[idx] = brightness;
+            data[idx + 1] = brightness;
+            data[idx + 2] = brightness;
+            data[idx + 3] = 200; // Semi-transparent
+        }
+
+        // Update progressively every 10 rows for responsiveness
+        if (row % 10 === 0) {
+            ctx.putImageData(imageData, 0, 0);
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
+    // Update canvas source coordinates
+    map.getSource('custom-hillshade').setCoordinates([
+        [sw.lng, ne.lat],
+        [ne.lng, ne.lat],
+        [ne.lng, sw.lat],
+        [sw.lng, sw.lat]
+    ]);
+}
+
+// Simplified exposure calculation without shadow check for hillshade grid
+async function calculateExposureSimple(aspect, slope, elevation, lat, lng) {
+    if (sunAltitude < 0) {
+        return { exposure: 0, incidenceAngle: 90 };
+    }
+
+    const slopeRad = slope * Math.PI / 180;
+    const aspectRad = aspect * Math.PI / 180;
+    const sunAltRad = sunAltitude * Math.PI / 180;
+    const sunAzRad = sunAzimuth * Math.PI / 180;
+
+    const slopeNx = Math.sin(slopeRad) * Math.sin(aspectRad);
+    const slopeNy = Math.sin(slopeRad) * Math.cos(aspectRad);
+    const slopeNz = Math.cos(slopeRad);
+
+    const sunDx = Math.cos(sunAltRad) * Math.sin(sunAzRad);
+    const sunDy = Math.cos(sunAltRad) * Math.cos(sunAzRad);
+    const sunDz = Math.sin(sunAltRad);
+
+    let dotProduct = slopeNx * sunDx + slopeNy * sunDy + slopeNz * sunDz;
+    const incidenceAngle = Math.acos(Math.max(-1, Math.min(1, dotProduct))) * 180 / Math.PI;
+    let exposure = Math.max(0, Math.min(1, dotProduct));
+
+    // Quick shadow check for nearby terrain blocking
+    const shadowFactor = await quickShadowCheck(lat, lng, elevation);
+    exposure *= shadowFactor;
+
+    return { exposure, incidenceAngle };
+}
+
+// Quick shadow check (simplified version for hillshade grid performance)
+async function quickShadowCheck(lat, lng, elevation) {
+    if (sunAltitude < 0) return 0;
+
+    const maxDistance = 5000; // 5km max
+    const stepSize = 200; // 200m steps
+
+    const sunAzRad = sunAzimuth * Math.PI / 180;
+    const sunAltRad = sunAltitude * Math.PI / 180;
+
+    const dLat = (Math.cos(sunAzRad) * stepSize) / 111320;
+    const dLng = (Math.sin(sunAzRad) * stepSize) / (111320 * Math.cos(lat * Math.PI / 180));
+
+    const steps = Math.floor(maxDistance / stepSize);
+    const zoom = 10; // Lower resolution for speed
+
+    for (let i = 1; i <= steps; i++) {
+        const currentLat = lat + dLat * i;
+        const currentLng = lng + dLng * i;
+        const distance = i * stepSize;
+        const rayHeight = elevation + distance * Math.tan(sunAltRad);
+
+        const terrainHeight = await getRealElevationCached(currentLat, currentLng, zoom);
+
+        if (terrainHeight !== null && terrainHeight > rayHeight) {
+            return 0; // In shadow
+        }
+    }
+
+    return 1; // In sun
+}
+
+// Cached version of getTerrainData for hillshade grid
+async function getTerrainDataCached(lat, lng, zoom) {
+    const key = `${lat.toFixed(4)},${lng.toFixed(4)},${zoom}`;
+
+    if (terrainCache.has(key)) {
+        return terrainCache.get(key);
+    }
+
+    return await getTerrainData(lat, lng, zoom);
+}
+
+// Cached version of getRealElevation for quick shadow checks
+async function getRealElevationCached(lat, lng, zoom) {
+    const key = `elev_${lat.toFixed(4)},${lng.toFixed(4)},${zoom}`;
+
+    if (terrainCache.has(key)) {
+        return terrainCache.get(key);
+    }
+
+    const elevation = await getRealElevation(lat, lng, zoom);
+    terrainCache.set(key, elevation);
+
+    return elevation;
+}
+
 function updateSunVisualization(minutes) {
     const center = map.getCenter();
     const lat = center.lat;
@@ -319,30 +522,8 @@ function updateSunVisualization(minutes) {
         ? Math.min(1, (altitude + 10) / 50)  // Gradual brightening
         : Math.max(0, (altitude + 20) / 30);  // Twilight effect
 
-    // Update hillshade layer with exact sun direction from astronomical calculations
-    if (map.getLayer('hillshade')) {
-        // Set illumination direction to actual sun azimuth (0° = north, 90° = east, 180° = south, 270° = west)
-        map.setPaintProperty('hillshade', 'hillshade-illumination-direction', azimuth);
-
-        // Use proper cartographic exaggeration values (0.5-1.0 range)
-        // Slightly increase when sun is higher for better slope visibility
-        // Standard GIS practice: moderate exaggeration for natural terrain appearance
-        const hillshadeIntensity = altitude > 0
-            ? 0.6 + (altitude / 90) * 0.4  // Range: 0.6-1.0 during day
-            : 0.3;  // Reduced at night
-        map.setPaintProperty('hillshade', 'hillshade-exaggeration', hillshadeIntensity);
-    }
-
-    // Adjust satellite opacity based on time of day for realistic lighting
-    if (map.getLayer('satellite')) {
-        // Keep satellite visible for terrain context (0.5-0.8 range)
-        const satelliteOpacity = 0.5 + (brightnessFactor * 0.3);  // Range: 0.5 to 0.8
-        map.setPaintProperty('satellite', 'raster-opacity', satelliteOpacity);
-
-        // Adjust satellite brightness for day/night effect
-        const satelliteBrightness = altitude > 0 ? 0 : -0.5;  // Darker at night
-        map.setPaintProperty('satellite', 'raster-brightness-max', 1 + brightnessFactor * 0.2);
-    }
+    // Update custom hillshade with actual sun calculations
+    updateCustomHillshade();
 
     // Update sun rays visualization
     updateSunRays(azimuth, altitude);
@@ -621,14 +802,16 @@ async function showPointInfo(lat, lng) {
         document.getElementById('aspect-value').textContent =
             `${getAspectDirection(terrainData.aspect)} (${terrainData.aspect.toFixed(0)}°) - ${getSlopeFacing(terrainData.aspect)}`;
 
-        // Calculate current exposure
-        const exposure = await calculateExposure(
+        // Calculate current exposure and sun-slope angle
+        const exposureData = await calculateExposure(
             terrainData.aspect,
             terrainData.slope,
             terrainData.elevation,
             lat,
             lng
         );
+        const exposure = exposureData.exposure;
+        const sunSlopeAngle = exposureData.incidenceAngle;
 
         // Get sun times
         const sunTimes = SunCalc.getTimes(currentDate, lat, lng);
@@ -652,6 +835,13 @@ async function showPointInfo(lat, lng) {
 
         // Update current exposure
         document.getElementById('current-exposure').textContent = Math.round(exposure * 100);
+
+        // Update sun-slope angle
+        if (sunAltitude > 0) {
+            document.getElementById('sun-slope-angle').textContent = sunSlopeAngle.toFixed(1);
+        } else {
+            document.getElementById('sun-slope-angle').textContent = '--';
+        }
 
         const inShadow = exposure === 0 && sunAltitude > 0;
         const status = sunAltitude < 0 ? '🌙 Night' :
@@ -861,8 +1051,14 @@ async function calculateExposure(aspect, slope, elevation, lat, lng) {
     const sunDy = Math.cos(sunAltRad) * Math.cos(sunAzRad);
     const sunDz = Math.sin(sunAltRad);
 
-    let exposure = slopeNx * sunDx + slopeNy * sunDy + slopeNz * sunDz;
-    exposure = Math.max(0, Math.min(1, exposure));
+    // Dot product gives cosine of angle between slope normal and sun direction
+    let dotProduct = slopeNx * sunDx + slopeNy * sunDy + slopeNz * sunDz;
+
+    // Calculate the actual angle in degrees (angle between sun ray and slope normal)
+    // The angle of incidence is 0° when sun is perpendicular to slope, 90° when parallel
+    const incidenceAngle = Math.acos(Math.max(-1, Math.min(1, dotProduct))) * 180 / Math.PI;
+
+    let exposure = Math.max(0, Math.min(1, dotProduct));
 
     // Apply shadow check (simplified for performance)
     if (exposure > 0) {
@@ -870,7 +1066,7 @@ async function calculateExposure(aspect, slope, elevation, lat, lng) {
         exposure *= shadowFactor;
     }
 
-    return exposure;
+    return { exposure, incidenceAngle };
 }
 
 // Calculate shadow (same as original solar calculator)
