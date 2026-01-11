@@ -413,10 +413,20 @@ async function updateCustomHillshade() {
     hillshadeRenderInProgress = true;
     const startTime = performance.now();
 
+    debugLog('🎨 Starting hillshade render...', 'info');
+
+    // Add timeout protection
+    const timeout = setTimeout(() => {
+        debugLog('❌ Hillshade render timeout (30s) - resetting', 'error');
+        hillshadeRenderInProgress = false;
+    }, 30000);
+
     try {
         const bounds = map.getBounds();
         const ne = bounds.getNorthEast();
         const sw = bounds.getSouthWest();
+
+        debugLog(`📍 Bounds: ${sw.lat.toFixed(2)},${sw.lng.toFixed(2)} to ${ne.lat.toFixed(2)},${ne.lng.toFixed(2)}`, 'info');
 
         // Calculate grid dimensions
         const latRange = ne.lat - sw.lat;
@@ -426,7 +436,7 @@ async function updateCustomHillshade() {
         const gridRows = Math.ceil(latRange / hillshadeGridResolution);
 
         // Limit grid size for performance - more aggressive for mobile
-        const maxDim = window.innerWidth < 768 ? 80 : 120; // Smaller grid for mobile
+        const maxDim = window.innerWidth < 768 ? 50 : 80; // Even smaller for testing
         const scaleFactor = Math.max(gridCols / maxDim, gridRows / maxDim, 1);
         const finalCols = Math.max(10, Math.floor(gridCols / scaleFactor));
         const finalRows = Math.max(10, Math.floor(gridRows / scaleFactor));
@@ -439,6 +449,8 @@ async function updateCustomHillshade() {
         customHillshadeCanvas.height = finalRows;
         const ctx = customHillshadeCanvas.getContext('2d');
 
+        debugLog('🖼 Canvas created: ' + finalCols + 'x' + finalRows, 'info');
+
         const imageData = ctx.createImageData(finalCols, finalRows);
         const data = imageData.data;
 
@@ -447,6 +459,9 @@ async function updateCustomHillshade() {
 
         let processedPoints = 0;
         let skippedPoints = 0;
+        let errorCount = 0;
+
+        debugLog('⏳ Processing grid points...', 'info');
 
         // Process each grid point WITHOUT shadow checking for performance
         for (let row = 0; row < finalRows; row++) {
@@ -454,45 +469,60 @@ async function updateCustomHillshade() {
                 const lat = sw.lat + (row + 0.5) * actualGridRes;
                 const lng = sw.lng + (col + 0.5) * actualGridRes;
 
-                // Get cached terrain data or calculate
-                const terrainData = await getTerrainDataCached(lat, lng, zoom);
-
                 const idx = (row * finalCols + col) * 4;
 
-                if (!terrainData) {
-                    // No data - set to neutral gray
+                try {
+                    // Get cached terrain data or calculate WITH TIMEOUT
+                    const terrainData = await Promise.race([
+                        getTerrainDataCached(lat, lng, zoom),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Terrain load timeout')), 5000))
+                    ]);
+
+                    if (!terrainData) {
+                        // No data - set to neutral gray
+                        data[idx] = 128;
+                        data[idx + 1] = 128;
+                        data[idx + 2] = 128;
+                        data[idx + 3] = 255;
+                        skippedPoints++;
+                        continue;
+                    }
+
+                    // Calculate hillshade WITHOUT shadow check for speed
+                    const hillshade = calculateHillshadeFast(
+                        terrainData.aspect,
+                        terrainData.slope
+                    );
+
+                    data[idx] = hillshade;       // Red
+                    data[idx + 1] = hillshade;   // Green
+                    data[idx + 2] = hillshade;   // Blue
+                    data[idx + 3] = 255;         // Full opacity
+
+                    processedPoints++;
+                } catch (err) {
+                    // Error loading terrain - use neutral gray
                     data[idx] = 128;
                     data[idx + 1] = 128;
                     data[idx + 2] = 128;
                     data[idx + 3] = 255;
-                    skippedPoints++;
-                    continue;
+                    errorCount++;
                 }
-
-                // Calculate hillshade WITHOUT shadow check for speed
-                const hillshade = calculateHillshadeFast(
-                    terrainData.aspect,
-                    terrainData.slope
-                );
-
-                data[idx] = hillshade;       // Red
-                data[idx + 1] = hillshade;   // Green
-                data[idx + 2] = hillshade;   // Blue
-                data[idx + 3] = 255;         // Full opacity
-
-                processedPoints++;
             }
 
             // Update progressively for responsiveness
-            if (row % 10 === 0 && row > 0) {
+            if (row % 5 === 0 && row > 0) {
                 ctx.putImageData(imageData, 0, 0);
+                debugLog(`⏳ Progress: ${Math.floor(row / finalRows * 100)}%`, 'info');
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
 
+        debugLog('✏️ Writing final image data...', 'info');
         ctx.putImageData(imageData, 0, 0);
 
         // Update canvas source coordinates
+        debugLog('📍 Updating canvas coordinates...', 'info');
         map.getSource('custom-hillshade').setCoordinates([
             [sw.lng, ne.lat],
             [ne.lng, ne.lat],
@@ -501,13 +531,17 @@ async function updateCustomHillshade() {
         ]);
 
         const elapsed = (performance.now() - startTime).toFixed(0);
-        debugLog(`✓ Hillshade rendered in ${elapsed}ms (${processedPoints} points, ${skippedPoints} skipped)`, 'success');
+        debugLog(`✓ Hillshade rendered in ${elapsed}ms`, 'success');
+        debugLog(`  ${processedPoints} processed, ${skippedPoints} skipped, ${errorCount} errors`, 'info');
 
     } catch (error) {
         debugLog(`❌ Hillshade error: ${error.message}`, 'error');
+        debugLog(`   Stack: ${error.stack}`, 'error');
         console.error('Hillshade rendering error:', error);
     } finally {
+        clearTimeout(timeout);
         hillshadeRenderInProgress = false;
+        debugLog('🏁 Render complete, flag reset', 'info');
     }
 }
 
