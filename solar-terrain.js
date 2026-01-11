@@ -305,9 +305,9 @@ function addCustomHillshadeLayer() {
         type: 'raster',
         source: 'custom-hillshade',
         paint: {
-            'raster-opacity': 0.6
+            'raster-opacity': 0.5  // Semi-transparent for blending with satellite
         }
-    });
+    });  // Add on top of satellite layer for proper blending
 
     // Trigger initial render
     updateCustomHillshade();
@@ -370,8 +370,8 @@ async function updateCustomHillshade() {
                 continue;
             }
 
-            // Calculate sun-slope interaction
-            const { exposure, incidenceAngle } = await calculateExposureSimple(
+            // Calculate hillshade value using standard GIS formula
+            const { hillshade, inShadow } = await calculateHillshade(
                 terrainData.aspect,
                 terrainData.slope,
                 terrainData.elevation,
@@ -379,24 +379,17 @@ async function updateCustomHillshade() {
                 lng
             );
 
-            // Color based on exposure: black for shadow, white for full sun
-            let brightness = 128; // Base gray
-
-            if (sunAltitude > 0) {
-                if (exposure > 0) {
-                    // In sun - brightness based on angle of incidence
-                    brightness = 128 + exposure * 127; // Range: 128-255
-                } else {
-                    // In shadow
-                    brightness = 0; // Black
-                }
-            }
+            // Hillshade is 0-255, with 128 as neutral gray
+            // For multiply blending, we need to map:
+            // - 0 (darkest shadow) stays 0
+            // - 128 (neutral) = no change to base imagery
+            // - 255 (brightest highlight) brightens the image
 
             const idx = (row * finalCols + col) * 4;
-            data[idx] = brightness;
-            data[idx + 1] = brightness;
-            data[idx + 2] = brightness;
-            data[idx + 3] = 200; // Semi-transparent
+            data[idx] = hillshade;       // Red
+            data[idx + 1] = hillshade;   // Green
+            data[idx + 2] = hillshade;   // Blue
+            data[idx + 3] = 255;         // Full opacity (blending done via multiply mode)
         }
 
         // Update progressively every 10 rows for responsiveness
@@ -417,34 +410,48 @@ async function updateCustomHillshade() {
     ]);
 }
 
-// Simplified exposure calculation without shadow check for hillshade grid
-async function calculateExposureSimple(aspect, slope, elevation, lat, lng) {
+// Calculate hillshade value using standard GIS formula
+// Based on ArcGIS/GDAL hillshade algorithm
+async function calculateHillshade(aspect, slope, elevation, lat, lng) {
     if (sunAltitude < 0) {
-        return { exposure: 0, incidenceAngle: 90 };
+        return { hillshade: 0, inShadow: true };
     }
 
+    // Convert sun altitude to zenith angle (zenith = 90° - altitude)
+    const zenith = 90.0 - sunAltitude;
+    const zenithRad = zenith * Math.PI / 180;
+
+    // Convert geographic azimuth to mathematical azimuth
+    // Geographic: 0°=N, 90°=E, 180°=S, 270°=W
+    // Mathematical: measured counter-clockwise from east
+    // Formula from ArcGIS: Azimuth_math = 360.0 - Azimuth + 90.0
+    let azimuthMath = 360.0 - sunAzimuth + 90.0;
+    if (azimuthMath >= 360.0) azimuthMath -= 360.0;
+    const azimuthRad = azimuthMath * Math.PI / 180;
+
+    // Convert slope and aspect to radians
     const slopeRad = slope * Math.PI / 180;
     const aspectRad = aspect * Math.PI / 180;
-    const sunAltRad = sunAltitude * Math.PI / 180;
-    const sunAzRad = sunAzimuth * Math.PI / 180;
 
-    const slopeNx = Math.sin(slopeRad) * Math.sin(aspectRad);
-    const slopeNy = Math.sin(slopeRad) * Math.cos(aspectRad);
-    const slopeNz = Math.cos(slopeRad);
+    // Standard GIS hillshade formula:
+    // Hillshade = 255.0 * ((cos(Zenith) * cos(Slope)) + (sin(Zenith) * sin(Slope) * cos(Azimuth - Aspect)))
+    const hillshadeValue = 255.0 * (
+        (Math.cos(zenithRad) * Math.cos(slopeRad)) +
+        (Math.sin(zenithRad) * Math.sin(slopeRad) * Math.cos(azimuthRad - aspectRad))
+    );
 
-    const sunDx = Math.cos(sunAltRad) * Math.sin(sunAzRad);
-    const sunDy = Math.cos(sunAltRad) * Math.cos(sunAzRad);
-    const sunDz = Math.sin(sunAltRad);
+    // Clamp to 0-255 range
+    let hillshade = Math.max(0, Math.min(255, hillshadeValue));
 
-    let dotProduct = slopeNx * sunDx + slopeNy * sunDy + slopeNz * sunDz;
-    const incidenceAngle = Math.acos(Math.max(-1, Math.min(1, dotProduct))) * 180 / Math.PI;
-    let exposure = Math.max(0, Math.min(1, dotProduct));
-
-    // Quick shadow check for nearby terrain blocking
+    // Check for terrain shadow blocking
     const shadowFactor = await quickShadowCheck(lat, lng, elevation);
-    exposure *= shadowFactor;
 
-    return { exposure, incidenceAngle };
+    if (shadowFactor === 0) {
+        // In shadow - darken significantly
+        hillshade = hillshade * 0.3; // Shadows are very dark
+    }
+
+    return { hillshade, inShadow: shadowFactor === 0 };
 }
 
 // Quick shadow check (simplified version for hillshade grid performance)
