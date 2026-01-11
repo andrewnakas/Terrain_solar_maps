@@ -192,11 +192,12 @@ map.on('load', () => {
     debugLog('✅ Map loaded successfully', 'success');
     updateSunPosition();
 
-    // Set satellite layer opacity to show terrain context
-    debugLog('Setting satellite opacity to 0.8', 'info');
-    map.setPaintProperty('satellite', 'raster-opacity', 0.8);
+    // Set satellite layer opacity higher to keep texture visible
+    debugLog('Setting satellite opacity to 0.85', 'info');
+    map.setPaintProperty('satellite', 'raster-opacity', 0.85);
 
     // Add MapLibre built-in hillshade layer (doesn't require loading terrain tiles!)
+    // Configured to only show dark shadows, not brighten sunlit areas
     debugLog('Adding built-in hillshade layer', 'info');
     map.addLayer({
         id: 'hillshade',
@@ -206,12 +207,12 @@ map.on('load', () => {
             visibility: 'visible'
         },
         paint: {
-            'hillshade-exaggeration': 1.0,
-            'hillshade-shadow-color': '#222',
+            'hillshade-exaggeration': 0.8,  // Moderate effect
+            'hillshade-shadow-color': '#000000',  // Pure black for dark shadows
             'hillshade-illumination-direction': 315, // Will be updated by sun
             'hillshade-illumination-anchor': 'map',
-            'hillshade-accent-color': '#888',
-            'hillshade-highlight-color': '#fff'
+            'hillshade-accent-color': '#ffffff',  // White = no color change in sun
+            'hillshade-highlight-color': '#ffffff'  // White = no brightening in sun
         }
     });
     debugLog('✓ Hillshade layer added successfully', 'success');
@@ -714,9 +715,15 @@ function updateSunVisualization(minutes) {
         debugLog(`🌄 Updating hillshade direction to ${azimuth.toFixed(1)}°`, 'info');
         map.setPaintProperty('hillshade', 'hillshade-illumination-direction', azimuth);
 
-        // Adjust exaggeration based on sun altitude for better visibility
-        const exaggeration = altitude > 0 ? 0.8 + (altitude / 90) * 0.5 : 0.5;
+        // Adjust exaggeration based on sun altitude - stronger shadows when sun is higher
+        const exaggeration = altitude > 0 ? 0.6 + (altitude / 90) * 0.6 : 0.3;  // Range: 0.6-1.2
         map.setPaintProperty('hillshade', 'hillshade-exaggeration', exaggeration);
+    }
+
+    // Adjust satellite layer opacity slightly for day/night (keeps texture visible)
+    if (map.getLayer('satellite')) {
+        const satelliteOpacity = altitude > 0 ? 0.85 : 0.7;
+        map.setPaintProperty('satellite', 'raster-opacity', satelliteOpacity);
     }
 
     // Update sun rays visualization
