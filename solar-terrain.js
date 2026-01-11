@@ -196,9 +196,25 @@ map.on('load', () => {
     debugLog('Setting satellite opacity to 0.8', 'info');
     map.setPaintProperty('satellite', 'raster-opacity', 0.8);
 
-    // Add custom hillshade canvas layer for accurate sun/shadow calculations
-    debugLog('Adding custom hillshade layer', 'info');
-    addCustomHillshadeLayer();
+    // Add MapLibre built-in hillshade layer (doesn't require loading terrain tiles!)
+    debugLog('Adding built-in hillshade layer', 'info');
+    map.addLayer({
+        id: 'hillshade',
+        type: 'hillshade',
+        source: 'terrarium-terrain',
+        layout: {
+            visibility: 'visible'
+        },
+        paint: {
+            'hillshade-exaggeration': 1.0,
+            'hillshade-shadow-color': '#222',
+            'hillshade-illumination-direction': 315, // Will be updated by sun
+            'hillshade-illumination-anchor': 'map',
+            'hillshade-accent-color': '#888',
+            'hillshade-highlight-color': '#fff'
+        }
+    });
+    debugLog('✓ Hillshade layer added successfully', 'success');
 
     // Initialize time slider
     initializeTimeSlider();
@@ -693,8 +709,15 @@ function updateSunVisualization(minutes) {
         ? Math.min(1, (altitude + 10) / 50)  // Gradual brightening
         : Math.max(0, (altitude + 20) / 30);  // Twilight effect
 
-    // Update custom hillshade with actual sun calculations
-    updateCustomHillshade();
+    // Update built-in hillshade with sun direction
+    if (map.getLayer('hillshade')) {
+        debugLog(`🌄 Updating hillshade direction to ${azimuth.toFixed(1)}°`, 'info');
+        map.setPaintProperty('hillshade', 'hillshade-illumination-direction', azimuth);
+
+        // Adjust exaggeration based on sun altitude for better visibility
+        const exaggeration = altitude > 0 ? 0.8 + (altitude / 90) * 0.5 : 0.5;
+        map.setPaintProperty('hillshade', 'hillshade-exaggeration', exaggeration);
+    }
 
     // Update sun rays visualization
     updateSunRays(azimuth, altitude);
