@@ -1,8 +1,77 @@
 /**
  * 3D Solar Terrain Map
  * Combines MapLibre GL JS 3D terrain with comprehensive solar exposure analysis
- * Version: 4.0 - Real-time sun visualization with 3D rays and terrain shading
+ * Version: 4.1 - Real-time sun visualization with debug logging and mobile optimization
  */
+
+// Debug logging system
+function debugLog(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    const colors = {
+        info: '#0f0',
+        warn: '#ff0',
+        error: '#f00',
+        success: '#0ff'
+    };
+    const color = colors[type] || colors.info;
+
+    console.log(`[${timestamp}] ${message}`);
+
+    const logContent = document.getElementById('debug-log-content');
+    if (logContent) {
+        const logEntry = document.createElement('div');
+        logEntry.style.color = color;
+        logEntry.style.marginBottom = '4px';
+        logEntry.textContent = `[${timestamp}] ${message}`;
+        logContent.appendChild(logEntry);
+        logContent.scrollTop = logContent.scrollHeight;
+
+        // Limit log entries to 100
+        while (logContent.children.length > 100) {
+            logContent.removeChild(logContent.firstChild);
+        }
+    }
+}
+
+function toggleDebugPanel() {
+    const panel = document.getElementById('debug-panel');
+    const btn = document.getElementById('debug-toggle-btn');
+    if (panel.style.display === 'none' || !panel.style.display) {
+        panel.style.display = 'flex';
+        btn.style.display = 'none';
+    } else {
+        panel.style.display = 'none';
+        btn.style.display = 'block';
+    }
+}
+
+function copyDebugLog() {
+    const logContent = document.getElementById('debug-log-content');
+    const text = Array.from(logContent.children).map(el => el.textContent).join('\n');
+
+    // For mobile compatibility
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            debugLog('✓ Log copied to clipboard!', 'success');
+        }).catch(() => {
+            // Fallback for mobile
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            debugLog('✓ Log copied (fallback method)', 'success');
+        });
+    }
+}
+
+function clearDebugLog() {
+    const logContent = document.getElementById('debug-log-content');
+    logContent.innerHTML = '<div style="color: #0f0;">Debug log cleared...</div>';
+}
 
 let map;
 let currentExaggeration = 1;
@@ -23,7 +92,8 @@ let currentDate = new Date();
 // Custom hillshade rendering
 let customHillshadeCanvas = null;
 let customHillshadeLayer = null;
-let hillshadeGridResolution = 0.001; // ~111 meters at equator (similar to solar analysis resolution)
+let hillshadeGridResolution = 0.003; // ~333 meters at equator (optimized for mobile)
+let hillshadeRenderInProgress = false;
 
 // Initialize the map
 map = new maplibregl.Map({
@@ -119,13 +189,15 @@ map.addControl(new maplibregl.FullscreenControl(), 'top-right');
 
 // Map load handler
 map.on('load', () => {
-    console.log('✅ Map loaded');
+    debugLog('✅ Map loaded successfully', 'success');
     updateSunPosition();
 
     // Set satellite layer opacity to show terrain context
-    map.setPaintProperty('satellite', 'raster-opacity', 0.7);
+    debugLog('Setting satellite opacity to 0.8', 'info');
+    map.setPaintProperty('satellite', 'raster-opacity', 0.8);
 
     // Add custom hillshade canvas layer for accurate sun/shadow calculations
+    debugLog('Adding custom hillshade layer', 'info');
     addCustomHillshadeLayer();
 
     // Initialize time slider
@@ -305,112 +377,170 @@ function addCustomHillshadeLayer() {
         type: 'raster',
         source: 'custom-hillshade',
         paint: {
-            'raster-opacity': 0.5  // Semi-transparent for blending with satellite
+            'raster-opacity': 0.7  // Increased opacity for better visibility
         }
     });  // Add on top of satellite layer for proper blending
 
-    // Trigger initial render
-    updateCustomHillshade();
+    debugLog('Hillshade layer added with 0.7 opacity', 'success');
 
-    // Update on map move/zoom
-    map.on('moveend', () => updateCustomHillshade());
-    map.on('zoomend', () => updateCustomHillshade());
+    // Trigger initial render
+    setTimeout(() => updateCustomHillshade(), 1000);
+
+    // Update on map move/zoom (debounced)
+    let hillshadeTimeout;
+    map.on('moveend', () => {
+        clearTimeout(hillshadeTimeout);
+        hillshadeTimeout = setTimeout(() => updateCustomHillshade(), 500);
+    });
+    map.on('zoomend', () => {
+        clearTimeout(hillshadeTimeout);
+        hillshadeTimeout = setTimeout(() => updateCustomHillshade(), 500);
+    });
 }
 
 // Update custom hillshade based on actual sun calculations
 async function updateCustomHillshade() {
-    if (!map || sunAltitude === undefined) return;
-
-    const bounds = map.getBounds();
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-
-    // Calculate grid dimensions
-    const latRange = ne.lat - sw.lat;
-    const lngRange = ne.lng - sw.lng;
-
-    const gridCols = Math.ceil(lngRange / hillshadeGridResolution);
-    const gridRows = Math.ceil(latRange / hillshadeGridResolution);
-
-    // Limit grid size for performance (max 200x200)
-    const maxDim = 200;
-    const scaleFactor = Math.max(gridCols / maxDim, gridRows / maxDim, 1);
-    const finalCols = Math.floor(gridCols / scaleFactor);
-    const finalRows = Math.floor(gridRows / scaleFactor);
-
-    console.log(`Rendering custom hillshade: ${finalCols}x${finalRows} grid`);
-
-    // Set canvas size
-    customHillshadeCanvas.width = finalCols;
-    customHillshadeCanvas.height = finalRows;
-    const ctx = customHillshadeCanvas.getContext('2d');
-
-    const imageData = ctx.createImageData(finalCols, finalRows);
-    const data = imageData.data;
-
-    const zoom = Math.min(map.getZoom(), 12);
-    const actualGridRes = hillshadeGridResolution * scaleFactor;
-
-    // Process each grid point
-    for (let row = 0; row < finalRows; row++) {
-        for (let col = 0; col < finalCols; col++) {
-            const lat = sw.lat + (row + 0.5) * actualGridRes;
-            const lng = sw.lng + (col + 0.5) * actualGridRes;
-
-            // Get cached terrain data or calculate
-            const terrainData = await getTerrainDataCached(lat, lng, zoom);
-
-            if (!terrainData) {
-                // No data - transparent
-                const idx = (row * finalCols + col) * 4;
-                data[idx] = 0;
-                data[idx + 1] = 0;
-                data[idx + 2] = 0;
-                data[idx + 3] = 0;
-                continue;
-            }
-
-            // Calculate hillshade value using standard GIS formula
-            const { hillshade, inShadow } = await calculateHillshade(
-                terrainData.aspect,
-                terrainData.slope,
-                terrainData.elevation,
-                lat,
-                lng
-            );
-
-            // Hillshade is 0-255, with 128 as neutral gray
-            // For multiply blending, we need to map:
-            // - 0 (darkest shadow) stays 0
-            // - 128 (neutral) = no change to base imagery
-            // - 255 (brightest highlight) brightens the image
-
-            const idx = (row * finalCols + col) * 4;
-            data[idx] = hillshade;       // Red
-            data[idx + 1] = hillshade;   // Green
-            data[idx + 2] = hillshade;   // Blue
-            data[idx + 3] = 255;         // Full opacity (blending done via multiply mode)
-        }
-
-        // Update progressively every 10 rows for responsiveness
-        if (row % 10 === 0) {
-            ctx.putImageData(imageData, 0, 0);
-            await new Promise(resolve => setTimeout(resolve, 0));
-        }
+    if (!map || sunAltitude === undefined) {
+        debugLog('⚠ Hillshade update skipped: map or sun position not ready', 'warn');
+        return;
     }
 
-    ctx.putImageData(imageData, 0, 0);
+    if (hillshadeRenderInProgress) {
+        debugLog('⚠ Hillshade render already in progress, skipping', 'warn');
+        return;
+    }
 
-    // Update canvas source coordinates
-    map.getSource('custom-hillshade').setCoordinates([
-        [sw.lng, ne.lat],
-        [ne.lng, ne.lat],
-        [ne.lng, sw.lat],
-        [sw.lng, sw.lat]
-    ]);
+    hillshadeRenderInProgress = true;
+    const startTime = performance.now();
+
+    try {
+        const bounds = map.getBounds();
+        const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+
+        // Calculate grid dimensions
+        const latRange = ne.lat - sw.lat;
+        const lngRange = ne.lng - sw.lng;
+
+        const gridCols = Math.ceil(lngRange / hillshadeGridResolution);
+        const gridRows = Math.ceil(latRange / hillshadeGridResolution);
+
+        // Limit grid size for performance - more aggressive for mobile
+        const maxDim = window.innerWidth < 768 ? 80 : 120; // Smaller grid for mobile
+        const scaleFactor = Math.max(gridCols / maxDim, gridRows / maxDim, 1);
+        const finalCols = Math.max(10, Math.floor(gridCols / scaleFactor));
+        const finalRows = Math.max(10, Math.floor(gridRows / scaleFactor));
+
+        debugLog(`📊 Hillshade grid: ${finalCols}x${finalRows} (${finalCols * finalRows} points)`, 'info');
+        debugLog(`☀ Sun: alt=${sunAltitude.toFixed(1)}° az=${sunAzimuth.toFixed(1)}°`, 'info');
+
+        // Set canvas size
+        customHillshadeCanvas.width = finalCols;
+        customHillshadeCanvas.height = finalRows;
+        const ctx = customHillshadeCanvas.getContext('2d');
+
+        const imageData = ctx.createImageData(finalCols, finalRows);
+        const data = imageData.data;
+
+        const zoom = Math.min(map.getZoom(), 11);
+        const actualGridRes = hillshadeGridResolution * scaleFactor;
+
+        let processedPoints = 0;
+        let skippedPoints = 0;
+
+        // Process each grid point WITHOUT shadow checking for performance
+        for (let row = 0; row < finalRows; row++) {
+            for (let col = 0; col < finalCols; col++) {
+                const lat = sw.lat + (row + 0.5) * actualGridRes;
+                const lng = sw.lng + (col + 0.5) * actualGridRes;
+
+                // Get cached terrain data or calculate
+                const terrainData = await getTerrainDataCached(lat, lng, zoom);
+
+                const idx = (row * finalCols + col) * 4;
+
+                if (!terrainData) {
+                    // No data - set to neutral gray
+                    data[idx] = 128;
+                    data[idx + 1] = 128;
+                    data[idx + 2] = 128;
+                    data[idx + 3] = 255;
+                    skippedPoints++;
+                    continue;
+                }
+
+                // Calculate hillshade WITHOUT shadow check for speed
+                const hillshade = calculateHillshadeFast(
+                    terrainData.aspect,
+                    terrainData.slope
+                );
+
+                data[idx] = hillshade;       // Red
+                data[idx + 1] = hillshade;   // Green
+                data[idx + 2] = hillshade;   // Blue
+                data[idx + 3] = 255;         // Full opacity
+
+                processedPoints++;
+            }
+
+            // Update progressively for responsiveness
+            if (row % 10 === 0 && row > 0) {
+                ctx.putImageData(imageData, 0, 0);
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // Update canvas source coordinates
+        map.getSource('custom-hillshade').setCoordinates([
+            [sw.lng, ne.lat],
+            [ne.lng, ne.lat],
+            [ne.lng, sw.lat],
+            [sw.lng, sw.lat]
+        ]);
+
+        const elapsed = (performance.now() - startTime).toFixed(0);
+        debugLog(`✓ Hillshade rendered in ${elapsed}ms (${processedPoints} points, ${skippedPoints} skipped)`, 'success');
+
+    } catch (error) {
+        debugLog(`❌ Hillshade error: ${error.message}`, 'error');
+        console.error('Hillshade rendering error:', error);
+    } finally {
+        hillshadeRenderInProgress = false;
+    }
 }
 
-// Calculate hillshade value using standard GIS formula
+// Fast hillshade calculation without shadow checking (for grid rendering)
+function calculateHillshadeFast(aspect, slope) {
+    if (sunAltitude < 0) {
+        return 50; // Dark at night
+    }
+
+    // Convert sun altitude to zenith angle (zenith = 90° - altitude)
+    const zenith = 90.0 - sunAltitude;
+    const zenithRad = zenith * Math.PI / 180;
+
+    // Convert geographic azimuth to mathematical azimuth
+    let azimuthMath = 360.0 - sunAzimuth + 90.0;
+    if (azimuthMath >= 360.0) azimuthMath -= 360.0;
+    const azimuthRad = azimuthMath * Math.PI / 180;
+
+    // Convert slope and aspect to radians
+    const slopeRad = slope * Math.PI / 180;
+    const aspectRad = aspect * Math.PI / 180;
+
+    // Standard GIS hillshade formula
+    const hillshadeValue = 255.0 * (
+        (Math.cos(zenithRad) * Math.cos(slopeRad)) +
+        (Math.sin(zenithRad) * Math.sin(slopeRad) * Math.cos(azimuthRad - aspectRad))
+    );
+
+    // Clamp to 0-255 range
+    return Math.max(0, Math.min(255, hillshadeValue));
+}
+
+// Calculate hillshade value using standard GIS formula (with shadow checking)
 // Based on ArcGIS/GDAL hillshade algorithm
 async function calculateHillshade(aspect, slope, elevation, lat, lng) {
     if (sunAltitude < 0) {
