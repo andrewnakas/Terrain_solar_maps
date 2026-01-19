@@ -207,7 +207,7 @@ map.on('load', () => {
             visibility: 'visible'
         },
         paint: {
-            'hillshade-exaggeration': 0.8,  // Moderate effect
+            'hillshade-exaggeration': 1.5,  // Increased for more shading
             'hillshade-shadow-color': '#000000',  // Pure black for dark shadows
             'hillshade-illumination-direction': 315, // Will be updated by sun
             'hillshade-illumination-anchor': 'map',
@@ -715,8 +715,8 @@ function updateSunVisualization(minutes) {
         debugLog(`🌄 Updating hillshade direction to ${azimuth.toFixed(1)}°`, 'info');
         map.setPaintProperty('hillshade', 'hillshade-illumination-direction', azimuth);
 
-        // Adjust exaggeration based on sun altitude - stronger shadows when sun is higher
-        const exaggeration = altitude > 0 ? 0.6 + (altitude / 90) * 0.6 : 0.3;  // Range: 0.6-1.2
+        // Much stronger exaggeration for more visible shadows
+        const exaggeration = altitude > 0 ? 1.2 + (altitude / 90) * 1.3 : 0.5;  // Range: 1.2-2.5
         map.setPaintProperty('hillshade', 'hillshade-exaggeration', exaggeration);
     }
 
