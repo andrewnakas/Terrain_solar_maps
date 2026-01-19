@@ -84,16 +84,16 @@ let tileCache = new Map();
 const tileSize = 512;
 const terrainTileUrl = 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp';
 
-// Sun position
+// Sun position - using REAL current date and time
 let sunAzimuth = 0;
 let sunAltitude = 0;
-let currentDate = new Date();
+let currentDate = new Date();  // Real current date/time
 
-// Custom hillshade rendering
-let customHillshadeCanvas = null;
-let customHillshadeLayer = null;
-let hillshadeGridResolution = 0.003; // ~333 meters at equator (optimized for mobile)
-let hillshadeRenderInProgress = false;
+// Real shadow visualization with ray-casting
+let shadowCanvas = null;
+let shadowCanvasLayer = null;
+let shadowGridResolution = 0.005; // ~555 meters - balance between accuracy and performance
+let shadowRenderInProgress = false;
 
 // Initialize the map
 map = new maplibregl.Map({
@@ -192,30 +192,13 @@ map.on('load', () => {
     debugLog('✅ Map loaded successfully', 'success');
     updateSunPosition();
 
-    // Set satellite layer opacity higher to keep texture visible
-    debugLog('Setting satellite opacity to 0.85', 'info');
-    map.setPaintProperty('satellite', 'raster-opacity', 0.85);
+    // Set satellite layer opacity
+    debugLog('Setting satellite opacity to 0.9 for clear terrain view', 'info');
+    map.setPaintProperty('satellite', 'raster-opacity', 0.9);
 
-    // Add MapLibre built-in hillshade layer (doesn't require loading terrain tiles!)
-    // Configured to only show dark shadows, not brighten sunlit areas
-    debugLog('Adding built-in hillshade layer', 'info');
-    map.addLayer({
-        id: 'hillshade',
-        type: 'hillshade',
-        source: 'terrarium-terrain',
-        layout: {
-            visibility: 'visible'
-        },
-        paint: {
-            'hillshade-exaggeration': 1.5,  // Increased for more shading
-            'hillshade-shadow-color': '#000000',  // Pure black for dark shadows
-            'hillshade-illumination-direction': 315, // Will be updated by sun
-            'hillshade-illumination-anchor': 'map',
-            'hillshade-accent-color': '#ffffff',  // White = no color change in sun
-            'hillshade-highlight-color': '#ffffff'  // White = no brightening in sun
-        }
-    });
-    debugLog('✓ Hillshade layer added successfully', 'success');
+    // Add real shadow visualization layer with actual ray-casting
+    debugLog('Adding real shadow layer with ray-cast calculations', 'info');
+    addRealShadowLayer();
 
     // Initialize time slider
     initializeTimeSlider();
@@ -377,42 +360,207 @@ function setTimeOfDay(preset) {
     }
 }
 
-// Add custom hillshade layer using canvas
-function addCustomHillshadeLayer() {
-    // Create canvas source for custom hillshade
-    customHillshadeCanvas = document.createElement('canvas');
+// Add real shadow layer using actual ray-casting
+function addRealShadowLayer() {
+    // Create canvas for shadow visualization
+    shadowCanvas = document.createElement('canvas');
 
-    map.addSource('custom-hillshade', {
+    map.addSource('real-shadows', {
         type: 'canvas',
-        canvas: customHillshadeCanvas,
-        coordinates: [[0, 0], [0, 0], [0, 0], [0, 0]], // Will be updated
+        canvas: shadowCanvas,
+        coordinates: [[0, 0], [0, 0], [0, 0], [0, 0]],
         animate: false
     });
 
     map.addLayer({
-        id: 'custom-hillshade-layer',
+        id: 'shadow-layer',
         type: 'raster',
-        source: 'custom-hillshade',
+        source: 'real-shadows',
         paint: {
-            'raster-opacity': 0.7  // Increased opacity for better visibility
+            'raster-opacity': 0.6  // Semi-transparent shadows over satellite
         }
-    });  // Add on top of satellite layer for proper blending
+    });
 
-    debugLog('Hillshade layer added with 0.7 opacity', 'success');
+    debugLog('✓ Real shadow layer created', 'success');
 
-    // Trigger initial render
-    setTimeout(() => updateCustomHillshade(), 1000);
+    // Trigger initial shadow calculation
+    setTimeout(() => calculateRealShadows(), 1000);
 
     // Update on map move/zoom (debounced)
-    let hillshadeTimeout;
+    let shadowTimeout;
     map.on('moveend', () => {
-        clearTimeout(hillshadeTimeout);
-        hillshadeTimeout = setTimeout(() => updateCustomHillshade(), 500);
+        clearTimeout(shadowTimeout);
+        shadowTimeout = setTimeout(() => calculateRealShadows(), 800);
     });
     map.on('zoomend', () => {
-        clearTimeout(hillshadeTimeout);
-        hillshadeTimeout = setTimeout(() => updateCustomHillshade(), 500);
+        clearTimeout(shadowTimeout);
+        shadowTimeout = setTimeout(() => calculateRealShadows(), 800);
     });
+}
+
+// Calculate REAL shadows using ray-casting for actual sun position
+async function calculateRealShadows() {
+    if (!map || sunAltitude === undefined || shadowRenderInProgress) {
+        if (shadowRenderInProgress) {
+            debugLog('⚠ Shadow calculation already in progress', 'warn');
+        }
+        return;
+    }
+
+    shadowRenderInProgress = true;
+    const startTime = performance.now();
+
+    debugLog('🌞 Starting REAL shadow calculation with ray-casting', 'info');
+    debugLog(`   Current time: ${simulationTime.toLocaleString()}`, 'info');
+    debugLog(`   Sun position: alt=${sunAltitude.toFixed(1)}° az=${sunAzimuth.toFixed(1)}°`, 'info');
+
+    const timeout = setTimeout(() => {
+        debugLog('❌ Shadow calculation timeout - resetting', 'error');
+        shadowRenderInProgress = false;
+    }, 60000);
+
+    try {
+        const bounds = map.getBounds();
+        const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+
+        const latRange = ne.lat - sw.lat;
+        const lngRange = ne.lng - sw.lng;
+
+        // Calculate grid - smaller for mobile
+        const maxDim = window.innerWidth < 768 ? 40 : 60;
+        const gridCols = Math.max(10, Math.min(maxDim, Math.ceil(lngRange / shadowGridResolution)));
+        const gridRows = Math.max(10, Math.min(maxDim, Math.ceil(latRange / shadowGridResolution)));
+
+        debugLog(`📊 Shadow grid: ${gridCols}x${gridRows} (${gridCols * gridRows} points)`, 'info');
+
+        shadowCanvas.width = gridCols;
+        shadowCanvas.height = gridRows;
+        const ctx = shadowCanvas.getContext('2d');
+        const imageData = ctx.createImageData(gridCols, gridRows);
+        const data = imageData.data;
+
+        const actualGridResLat = latRange / gridRows;
+        const actualGridResLng = lngRange / gridCols;
+        const zoom = Math.min(map.getZoom(), 11);
+
+        let inSunCount = 0;
+        let inShadowCount = 0;
+
+        // Calculate shadow for each grid point using REAL ray-casting
+        for (let row = 0; row < gridRows; row++) {
+            for (let col = 0; col < gridCols; col++) {
+                const lat = sw.lat + (row + 0.5) * actualGridResLat;
+                const lng = sw.lng + (col + 0.5) * actualGridResLng;
+                const idx = (row * gridCols + col) * 4;
+
+                try {
+                    // Get terrain elevation
+                    const elevation = await getRealElevationCached(lat, lng, zoom);
+
+                    if (elevation === null) {
+                        // No elevation data - assume in sun
+                        data[idx] = 255;
+                        data[idx + 1] = 255;
+                        data[idx + 2] = 255;
+                        data[idx + 3] = 0;  // Transparent
+                        continue;
+                    }
+
+                    // Ray-cast to check if terrain blocks sun
+                    const inShadow = await checkTerrainBlocksRay(lat, lng, elevation, sunAzimuth, sunAltitude, zoom);
+
+                    if (inShadow || sunAltitude <= 0) {
+                        // In shadow - show dark overlay
+                        data[idx] = 0;
+                        data[idx + 1] = 0;
+                        data[idx + 2] = 0;
+                        data[idx + 3] = 180;  // Dark semi-transparent
+                        inShadowCount++;
+                    } else {
+                        // In sun - transparent (show satellite)
+                        data[idx] = 255;
+                        data[idx + 1] = 255;
+                        data[idx + 2] = 255;
+                        data[idx + 3] = 0;  // Fully transparent
+                        inSunCount++;
+                    }
+                } catch (err) {
+                    // Error - assume in sun
+                    data[idx] = 255;
+                    data[idx + 1] = 255;
+                    data[idx + 2] = 255;
+                    data[idx + 3] = 0;
+                }
+            }
+
+            // Progress update every 5 rows
+            if (row % 5 === 0 && row > 0) {
+                const progress = Math.floor((row / gridRows) * 100);
+                debugLog(`⏳ Shadow calculation: ${progress}%`, 'info');
+                ctx.putImageData(imageData, 0, 0);
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // Update canvas coordinates
+        map.getSource('real-shadows').setCoordinates([
+            [sw.lng, ne.lat],
+            [ne.lng, ne.lat],
+            [ne.lng, sw.lat],
+            [sw.lng, sw.lat]
+        ]);
+
+        const elapsed = (performance.now() - startTime).toFixed(0);
+        debugLog(`✓ Real shadows calculated in ${elapsed}ms`, 'success');
+        debugLog(`   ${inSunCount} in sun, ${inShadowCount} in shadow`, 'info');
+
+    } catch (error) {
+        debugLog(`❌ Shadow calculation error: ${error.message}`, 'error');
+        console.error('Shadow calculation error:', error);
+    } finally {
+        clearTimeout(timeout);
+        shadowRenderInProgress = false;
+    }
+}
+
+// Check if terrain blocks sun ray (actual ray-casting)
+async function checkTerrainBlocksRay(lat, lng, elevation, azimuth, altitude, zoom) {
+    if (altitude <= 0) return true;  // Sun below horizon
+
+    const maxDistance = 10000; // Check up to 10km
+    const stepSize = 150; // 150m steps for accuracy
+
+    const azRad = azimuth * Math.PI / 180;
+    const altRad = altitude * Math.PI / 180;
+
+    // Direction to sun
+    const dLat = (Math.cos(azRad) * stepSize) / 111320;
+    const dLng = (Math.sin(azRad) * stepSize) / (111320 * Math.cos(lat * Math.PI / 180));
+
+    const steps = Math.floor(maxDistance / stepSize);
+
+    // Ray-cast toward sun
+    for (let i = 1; i <= steps; i++) {
+        const checkLat = lat + dLat * i;
+        const checkLng = lng + dLng * i;
+        const distance = i * stepSize;
+
+        // Height of sun ray at this distance
+        const rayHeight = elevation + distance * Math.tan(altRad);
+
+        // Get terrain height at this point
+        const terrainHeight = await getRealElevationCached(checkLat, checkLng, zoom);
+
+        if (terrainHeight !== null && terrainHeight > rayHeight) {
+            // Terrain blocks the sun!
+            return true;
+        }
+    }
+
+    return false;  // No terrain blocking - in sun
 }
 
 // Update custom hillshade based on actual sun calculations
@@ -710,19 +858,16 @@ function updateSunVisualization(minutes) {
         ? Math.min(1, (altitude + 10) / 50)  // Gradual brightening
         : Math.max(0, (altitude + 20) / 30);  // Twilight effect
 
-    // Update built-in hillshade with sun direction
-    if (map.getLayer('hillshade')) {
-        debugLog(`🌄 Updating hillshade direction to ${azimuth.toFixed(1)}°`, 'info');
-        map.setPaintProperty('hillshade', 'hillshade-illumination-direction', azimuth);
+    // Update global sun position variables for shadow calculations
+    sunAzimuth = azimuth;
+    sunAltitude = altitude;
 
-        // Much stronger exaggeration for more visible shadows
-        const exaggeration = altitude > 0 ? 1.2 + (altitude / 90) * 1.3 : 0.5;  // Range: 1.2-2.5
-        map.setPaintProperty('hillshade', 'hillshade-exaggeration', exaggeration);
-    }
+    // Trigger REAL shadow calculation with ray-casting
+    calculateRealShadows();
 
-    // Adjust satellite layer opacity slightly for day/night (keeps texture visible)
+    // Adjust satellite opacity for day/night
     if (map.getLayer('satellite')) {
-        const satelliteOpacity = altitude > 0 ? 0.85 : 0.7;
+        const satelliteOpacity = altitude > 0 ? 0.9 : 0.7;
         map.setPaintProperty('satellite', 'raster-opacity', satelliteOpacity);
     }
 
