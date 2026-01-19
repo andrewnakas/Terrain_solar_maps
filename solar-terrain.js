@@ -377,7 +377,7 @@ function addRealShadowLayer() {
         type: 'raster',
         source: 'real-shadows',
         paint: {
-            'raster-opacity': 0.6  // Semi-transparent shadows over satellite
+            'raster-opacity': 0.7  // Darker shadows
         }
     });
 
@@ -471,11 +471,11 @@ async function calculateRealShadows() {
                     const inShadow = await checkTerrainBlocksRay(lat, lng, elevation, sunAzimuth, sunAltitude, zoom);
 
                     if (inShadow || sunAltitude <= 0) {
-                        // In shadow - show dark overlay
+                        // In shadow - show VERY DARK overlay
                         data[idx] = 0;
                         data[idx + 1] = 0;
                         data[idx + 2] = 0;
-                        data[idx + 3] = 180;  // Dark semi-transparent
+                        data[idx + 3] = 220;  // Very dark, almost opaque
                         inShadowCount++;
                     } else {
                         // In sun - transparent (show satellite)
@@ -874,6 +874,9 @@ function updateSunVisualization(minutes) {
     // Update sun rays visualization
     updateSunRays(azimuth, altitude);
 
+    // Update 3D sun sphere in sky
+    update3DSun(azimuth, altitude);
+
     // Update sun badge
     const badge = document.getElementById('sun-badge');
     if (altitude > 0) {
@@ -883,6 +886,50 @@ function updateSunVisualization(minutes) {
         badge.textContent = `🌙 Below Horizon`;
         badge.style.color = '#6b7280';
     }
+}
+
+// Update 3D sun sphere position in sky
+function update3DSun(azimuth, altitude) {
+    // Remove existing sun
+    const existingSun = document.querySelector('.sun-sphere');
+    if (existingSun) {
+        existingSun.remove();
+    }
+
+    // Only show sun if above horizon
+    if (altitude <= 0) return;
+
+    const mapContainer = document.getElementById('map');
+    const sun = document.createElement('div');
+    sun.className = 'sun-sphere';
+
+    // Calculate sun position in sky
+    // Altitude: 0° = horizon, 90° = zenith
+    // Azimuth: 0° = N, 90° = E, 180° = S, 270° = W
+
+    // Convert to screen position
+    // X position based on azimuth (left-right)
+    const xPercent = 50 + Math.sin(azimuth * Math.PI / 180) * 40;
+
+    // Y position based on altitude (top-bottom)
+    // At horizon (0°) = bottom, at zenith (90°) = top
+    const yPercent = 80 - (altitude / 90) * 60;  // Range from 80% (horizon) to 20% (zenith)
+
+    sun.style.left = xPercent + '%';
+    sun.style.top = yPercent + '%';
+    sun.style.transform = 'translate(-50%, -50%)';
+
+    // Scale sun based on altitude (bigger when higher)
+    const scale = 0.6 + (altitude / 90) * 0.6;  // Range 0.6 to 1.2
+    sun.style.transform += ` scale(${scale})`;
+
+    // Brightness based on altitude
+    const brightness = 0.7 + (altitude / 90) * 0.5;  // Range 0.7 to 1.2
+    sun.style.filter = `brightness(${brightness})`;
+
+    mapContainer.appendChild(sun);
+
+    debugLog(`☀ Sun rendered at alt=${altitude.toFixed(1)}° az=${azimuth.toFixed(1)}° (${xPercent.toFixed(0)}%, ${yPercent.toFixed(0)}%)`, 'info');
 }
 
 function updateSunRays(azimuth, altitude) {
